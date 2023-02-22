@@ -55,7 +55,14 @@ fn test_ca_card() -> Result<()> {
 /// visible via CA API.
 fn test_ca(ca: Oca) -> Result<()> {
     // make CA user
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let certs = ca.user_certs_get_all()?;
 
@@ -125,6 +132,7 @@ fn test_expiring_certification(ca: Oca) -> Result<()> {
         Some(365),
         false,
         false,
+        None,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -374,10 +382,24 @@ fn test_ca_insert_duplicate_email(ca: Oca) -> Result<()> {
     // (e.g. "normal cert" vs "code signing cert")
 
     // make CA user
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     // make another CA user with the same email address
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let certs = ca.user_certs_get_all()?;
 
@@ -528,7 +550,14 @@ fn test_ca_signatures(gpg: Ctx, ca: Oca) -> Result<()> {
 
     // create carol, CA will sign carol's key.
     // also, CA key gets a tsig by carol
-    ca.user_new(Some("Carol"), &["carol@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Carol"),
+        &["carol@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     for user in ca.users_get_all()? {
         let certs = ca.get_certs_by_user(&user)?;
@@ -588,7 +617,14 @@ fn test_apply_revocation_card() -> Result<()> {
 /// Check that the revocation has been published to the user's cert.
 fn test_apply_revocation(ca: Oca) -> Result<()> {
     // make CA user
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let certs = ca.user_certs_get_all()?;
 
@@ -725,7 +761,14 @@ fn test_revocation_no_fingerprint(gpg: Ctx, ca: Oca) -> Result<()> {
     // create two different revocation certificates for one key and import them
 
     // create Alice
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     // gpg: make key for Bob
     gpg.create_user("Bob <bob@example.org>");
@@ -862,7 +905,14 @@ fn test_create_user_with_pw_card() -> Result<()> {
 /// encrypted user key)
 fn test_create_user_with_pw(ca: Oca) -> Result<()> {
     // make CA user
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, true, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        true,
+        false,
+        None,
+    )?;
 
     let certs = ca.user_certs_get_all()?;
     assert_eq!(certs.len(), 1);
@@ -908,10 +958,38 @@ fn test_refresh(ca: Oca) -> Result<()> {
     let ca_fp = ca_cert.fingerprint();
 
     // make CA user
-    ca.user_new(Some("Alice"), &["alice@example.org"], Some(10), true, false)?;
-    ca.user_new(Some("Bob"), &["bob@example.org"], Some(365), true, false)?;
-    ca.user_new(Some("Carol"), &["carol@example.org"], None, true, false)?;
-    ca.user_new(Some("Dave"), &["dave@example.org"], Some(10), true, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        Some(10),
+        true,
+        false,
+        None,
+    )?;
+    ca.user_new(
+        Some("Bob"),
+        &["bob@example.org"],
+        Some(365),
+        true,
+        false,
+        None,
+    )?;
+    ca.user_new(
+        Some("Carol"),
+        &["carol@example.org"],
+        None,
+        true,
+        false,
+        None,
+    )?;
+    ca.user_new(
+        Some("Dave"),
+        &["dave@example.org"],
+        Some(10),
+        true,
+        false,
+        None,
+    )?;
 
     // set dave to "inactive"
     let cert = ca.certs_by_email("dave@example.org")?;
@@ -1003,7 +1081,14 @@ fn test_ca_re_certify_card() -> Result<()> {
 /// Re-certify with the new CA, check that certifications exist as expected
 fn test_ca_re_certify(gpg: Ctx, ca1: Oca) -> Result<()> {
     // make CA user (certified by the CA)
-    ca1.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca1.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let (bob, _rev) = CertBuilder::new()
         .add_userid("Bob Baker <bob@example.org>")

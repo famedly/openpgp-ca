@@ -34,15 +34,30 @@ fn test_ca_export_wkd() -> Result<()> {
     let cau = Uninit::new(Some(&db))?;
     let ca = cau.init_softkey("example.org", None)?;
 
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
     ca.user_new(
         Some("Bob"),
         &["bob@example.org", "bob@other.org"],
         None,
         false,
         false,
+        None,
     )?;
-    ca.user_new(Some("Carol"), &["carol@other.org"], None, false, false)?;
+    ca.user_new(
+        Some("Carol"),
+        &["carol@other.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let wkd_dir = home_path + "/wkd/";
     let wkd_path = Path::new(&wkd_dir);
@@ -98,8 +113,15 @@ fn test_wkd_delist() -> Result<()> {
     let ca = cau.init_softkey("example.org", None)?;
 
     // make CA users
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, true, false)?;
-    ca.user_new(Some("Bob"), &["bob@example.org"], None, true, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        true,
+        false,
+        None,
+    )?;
+    ca.user_new(Some("Bob"), &["bob@example.org"], None, true, false, None)?;
 
     // set bob to "delisted"
     let cert = ca.certs_by_email("bob@example.org")?;

@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use clap::{AppSettings, Parser, Subcommand};
+use openpgp_ca_lib::pgp::CipherSuite;
 
 #[derive(Parser)]
 #[clap(
@@ -249,6 +250,9 @@ pub enum UserCommand {
             help = "Minimal output (for consumption by tools such as 'pass')"
         )]
         minimal: bool,
+
+        #[clap(long = "cipher-suite", help = "Set cipher suite")]
+        cipher_suite: Option<CipherSuite>,
     },
 
     /// Add Revocation Certificate
