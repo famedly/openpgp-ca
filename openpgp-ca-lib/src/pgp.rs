@@ -7,6 +7,7 @@
 //! PGP helper functions.
 
 use std::convert::TryInto;
+use std::str::FromStr;
 use std::time::SystemTime;
 
 use anyhow::{Context, Result};
@@ -16,7 +17,7 @@ use sequoia_openpgp::cert;
 use sequoia_openpgp::cert::amalgamation::key::ValidKeyAmalgamation;
 use sequoia_openpgp::cert::amalgamation::{ValidAmalgamation, ValidateAmalgamation};
 use sequoia_openpgp::cert::prelude::ComponentAmalgamation;
-use sequoia_openpgp::cert::{CertParser, CipherSuite};
+use sequoia_openpgp::cert::{CertParser, CipherSuite as SeqCipherSuite};
 use sequoia_openpgp::crypto::KeyPair;
 use sequoia_openpgp::packet::signature::SignatureBuilder;
 use sequoia_openpgp::packet::{signature, Signature, UserID};
@@ -168,11 +169,12 @@ pub(crate) fn make_user_cert(
     emails: &[&str],
     name: Option<&str>,
     password: bool,
+    cipher_suite: Option<CipherSuite>,
 ) -> Result<(Cert, Signature, Option<String>)> {
     let pass = if password { Some(diceware()) } else { None };
 
     let mut builder = cert::CertBuilder::new()
-        .set_cipher_suite(CipherSuite::RSA4k)
+        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::RSA4k).into())
         .add_subkey(
             KeyFlags::empty()
                 .set_transport_encryption()
@@ -510,4 +512,46 @@ pub fn valid_certifications_by(
         })
         .cloned()
         .collect()
+}
+
+#[derive(Clone)]
+pub enum CipherSuite {
+    Cv25519,
+    RSA3k,
+    P256,
+    P384,
+    P521,
+    RSA2k,
+    RSA4k,
+}
+
+impl From<CipherSuite> for SeqCipherSuite {
+    fn from(value: CipherSuite) -> Self {
+        match value {
+            CipherSuite::Cv25519 => SeqCipherSuite::Cv25519,
+            CipherSuite::RSA3k => SeqCipherSuite::RSA3k,
+            CipherSuite::P256 => SeqCipherSuite::P256,
+            CipherSuite::P384 => SeqCipherSuite::P384,
+            CipherSuite::P521 => SeqCipherSuite::P521,
+            CipherSuite::RSA2k => SeqCipherSuite::RSA2k,
+            CipherSuite::RSA4k => SeqCipherSuite::RSA4k,
+        }
+    }
+}
+
+impl FromStr for CipherSuite {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
+            "cv25519" => CipherSuite::Cv25519,
+            "rsa3k" => CipherSuite::RSA3k,
+            "p256" => CipherSuite::P256,
+            "p384" => CipherSuite::P384,
+            "p521" => CipherSuite::P521,
+            "rsa2k" => CipherSuite::RSA2k,
+            "rsa4k" => CipherSuite::RSA4k,
+            _ => return Err("Unknown cipher suite"),
+        })
+    }
 }

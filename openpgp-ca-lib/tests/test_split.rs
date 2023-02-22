@@ -65,7 +65,17 @@ fn split_certify(ca: Oca) -> Result<()> {
     let back = Oca::open(back_path.to_str())?;
 
     // Make user on online ca
-    front.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    front.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+        true,
+        true,
+        false,
+    )?;
 
     let certs = front.user_certs_get_all()?;
     assert_eq!(certs.len(), 1);

@@ -14,7 +14,7 @@ use sequoia_openpgp::serialize::SerializeInto;
 use sequoia_openpgp::Cert;
 
 use crate::db::models;
-use crate::pgp;
+use crate::pgp::{self, CipherSuite};
 use crate::secret::CaSec;
 use crate::types::CertificationStatus;
 use crate::Oca;
@@ -26,10 +26,11 @@ pub fn user_new(
     duration_days: Option<u64>,
     password: bool,
     output_format_minimal: bool,
+    cipher_suite: Option<CipherSuite>,
 ) -> Result<()> {
     // Generate new user key
-    let (user_key, user_revoc, pass) =
-        pgp::make_user_cert(emails, name, password).context("make_user_cert failed")?;
+    let (user_key, user_revoc, pass) = pgp::make_user_cert(emails, name, password, cipher_suite)
+        .context("make_user_cert failed")?;
 
     // -- CA secret operation --
     // CA certifies user cert
