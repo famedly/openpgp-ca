@@ -78,7 +78,7 @@ fn init_card_import_key() -> Result<()> {
     assert!(ca_path.to_str().is_some());
 
     let cau_old = Uninit::new(ca_path.to_str())?;
-    let _ca_old = cau_old.init_softkey("example.org", None)?;
+    let _ca_old = cau_old.init_softkey("example.org", None, None)?;
 
     // Retrieve the "old" CA key
     let sqlite = Connection::open(ca_path)?;
@@ -141,7 +141,8 @@ fn init_card_import_card() -> Result<()> {
     assert!(ca_path.to_str().is_some());
 
     let cau_old = Uninit::new(ca_path.to_str())?;
-    let (ca_old, _ca_private) = cau_old.init_card_generate_on_host(&ident, "example.org", None)?;
+    let (ca_old, _ca_private) =
+        cau_old.init_card_generate_on_host(&ident, "example.org", None, None)?;
 
     let ca_pub = ca_old.ca_get_cert_pub()?;
 
@@ -216,7 +217,7 @@ fn card_import_migrate() -> Result<()> {
         // Set up "pre-existing" softkey CA instance
 
         let cau_old = Uninit::new(ca_path.to_str())?;
-        let ca_old = cau_old.init_softkey("example.org", None)?;
+        let ca_old = cau_old.init_softkey("example.org", None, None)?;
 
         ca_old.user_new(
             Some("Alice"),

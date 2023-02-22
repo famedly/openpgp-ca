@@ -19,7 +19,7 @@ fn split_certify_soft() -> Result<()> {
     let (_gpg, cau) = util::setup_one_uninit()?;
 
     // Make new softkey CA
-    let ca = cau.init_softkey("example.org", None)?;
+    let ca = cau.init_softkey("example.org", None, None)?;
 
     split_certify(ca)
 }
@@ -33,7 +33,7 @@ fn split_certify_card() -> Result<()> {
     let (_gpg, cau) = util::setup_one_uninit()?;
 
     // Make new card-based CA
-    let (ca, _privkey) = cau.init_card_generate_on_host(&ident, "example.org", None)?;
+    let (ca, _privkey) = cau.init_card_generate_on_host(&ident, "example.org", None, None)?;
 
     split_certify(ca)
 }
@@ -100,7 +100,7 @@ fn split_add_bridge_soft() -> Result<()> {
     let (_gpg, cau) = util::setup_one_uninit()?;
 
     // Make new softkey CA
-    let ca = cau.init_softkey("example.org", None)?;
+    let ca = cau.init_softkey("example.org", None, None)?;
 
     split_add_bridge(ca)
 }
@@ -114,7 +114,7 @@ fn split_add_bridge_card() -> Result<()> {
     let (_gpg, cau) = util::setup_one_uninit()?;
 
     // Make new card-based CA
-    let (ca, _privkey) = cau.init_card_generate_on_host(&ident, "example.org", None)?;
+    let (ca, _privkey) = cau.init_card_generate_on_host(&ident, "example.org", None, None)?;
 
     split_add_bridge(ca)
 }
@@ -138,7 +138,7 @@ fn split_add_bridge(ca1: Oca) -> Result<()> {
 
     // Make new "remote" softkey CA
     let (gpg, cau2) = util::setup_one_uninit()?;
-    let ca2 = cau2.init_softkey("remote.example", None)?;
+    let ca2 = cau2.init_softkey("remote.example", None, None)?;
 
     // Split softkey CA into back and front instances
     let mut front_path = tmp_path.clone();
