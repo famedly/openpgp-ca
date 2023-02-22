@@ -36,6 +36,9 @@ fn init_on_card() -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -98,6 +101,9 @@ fn init_card_import_key() -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -172,6 +178,9 @@ fn init_card_import_card() -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -226,6 +235,9 @@ fn card_import_migrate() -> Result<()> {
             false,
             false,
             None,
+            true,
+            true,
+            false,
         )?;
     }
 

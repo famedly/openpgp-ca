@@ -37,6 +37,9 @@
 //!     false,
 //!     false,
 //!     None,
+//!     true,
+//!     true,
+//!     false,
 //! )
 //! .unwrap();
 //! ```
@@ -688,6 +691,9 @@ impl Oca {
         password: bool,
         output_format_minimal: bool,
         cipher_suite: Option<CipherSuite>,
+        enable_encryption_subkey: bool,
+        enable_signing_subkey: bool,
+        enable_authentication_subkey: bool,
     ) -> Result<()> {
         self.db().transaction(|| {
             cert::user_new(
@@ -698,6 +704,9 @@ impl Oca {
                 password,
                 output_format_minimal,
                 cipher_suite,
+                enable_encryption_subkey,
+                enable_signing_subkey,
+                enable_authentication_subkey,
             )
         })
     }

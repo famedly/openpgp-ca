@@ -41,6 +41,9 @@ fn test_ca_export_wkd() -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
     ca.user_new(
         Some("Bob"),
@@ -49,6 +52,9 @@ fn test_ca_export_wkd() -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
     ca.user_new(
         Some("Carol"),
@@ -57,6 +63,9 @@ fn test_ca_export_wkd() -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let wkd_dir = home_path + "/wkd/";
@@ -120,8 +129,21 @@ fn test_wkd_delist() -> Result<()> {
         true,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
-    ca.user_new(Some("Bob"), &["bob@example.org"], None, true, false, None)?;
+    ca.user_new(
+        Some("Bob"),
+        &["bob@example.org"],
+        None,
+        true,
+        false,
+        None,
+        true,
+        true,
+        false,
+    )?;
 
     // set bob to "delisted"
     let cert = ca.certs_by_email("bob@example.org")?;

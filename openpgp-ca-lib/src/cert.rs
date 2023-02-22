@@ -25,10 +25,21 @@ pub fn user_new(
     password: bool,
     output_format_minimal: bool,
     cipher_suite: Option<CipherSuite>,
+    enable_encryption_subkey: bool,
+    enable_signing_subkey: bool,
+    enable_authentication_subkey: bool,
 ) -> Result<()> {
     // Generate new user key
-    let (user_key, user_revoc, pass) = pgp::make_user_cert(emails, name, password, cipher_suite)
-        .context("make_user_cert failed")?;
+    let (user_key, user_revoc, pass) = pgp::make_user_cert(
+        emails,
+        name,
+        password,
+        cipher_suite,
+        enable_encryption_subkey,
+        enable_signing_subkey,
+        enable_authentication_subkey,
+    )
+    .context("make_user_cert failed")?;
 
     // CA certifies user cert
     let user_certified = sign_cert_emails(oca, &user_key, Some(emails), duration_days)

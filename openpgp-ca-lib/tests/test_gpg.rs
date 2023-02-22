@@ -56,8 +56,21 @@ fn test_alice_authenticates_bob_centralized(gpg: Ctx, ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
-    ca.user_new(Some("Bob"), &["bob@example.org"], None, false, false, None)?;
+    ca.user_new(
+        Some("Bob"),
+        &["bob@example.org"],
+        None,
+        false,
+        false,
+        None,
+        true,
+        true,
+        false,
+    )?;
 
     // ---- import keys from OpenPGP CA into GnuPG ----
 
@@ -282,13 +295,33 @@ fn test_bridge(gpg: Ctx, ca1: Oca, ca2: Oca) -> Result<()> {
 
     // make CA user
     assert!(ca1
-        .user_new(Some("Alice"), &["alice@some.org"], None, false, false, None,)
+        .user_new(
+            Some("Alice"),
+            &["alice@some.org"],
+            None,
+            false,
+            false,
+            None,
+            true,
+            true,
+            false
+        )
         .is_ok());
 
     // ---- populate second OpenPGP CA instance ----
 
     // make CA user
-    ca2.user_new(Some("Bob"), &["bob@other.org"], None, false, false, None)?;
+    ca2.user_new(
+        Some("Bob"),
+        &["bob@other.org"],
+        None,
+        false,
+        false,
+        None,
+        true,
+        true,
+        false,
+    )?;
 
     // make CA user that is out of the domain scope for ca2
     ca2.user_new(
@@ -298,6 +331,9 @@ fn test_bridge(gpg: Ctx, ca1: Oca, ca2: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     // ---- setup bridges: scoped trust between one.org and two.org ---
@@ -441,6 +477,9 @@ fn test_multi_bridge(gpg: Ctx, ca1: Oca, ca2: Oca, ca3: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     ca3.user_new(
@@ -450,8 +489,21 @@ fn test_multi_bridge(gpg: Ctx, ca1: Oca, ca2: Oca, ca3: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
-    ca3.user_new(Some("Bob"), &["bob@beta.org"], None, false, false, None)?;
+    ca3.user_new(
+        Some("Bob"),
+        &["bob@beta.org"],
+        None,
+        false,
+        false,
+        None,
+        true,
+        true,
+        false,
+    )?;
 
     // ---- set up bridges: scoped trust between alpha<->beta and beta<->gamma ---
     let home_path = String::from(gpg.get_homedir().to_str().unwrap());
@@ -596,9 +648,22 @@ fn test_scoping(gpg: Ctx, ca1: Oca, ca2: Oca, ca3: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
-    ca3.user_new(Some("Bob"), &["bob@beta.org"], None, false, false, None)?;
+    ca3.user_new(
+        Some("Bob"),
+        &["bob@beta.org"],
+        None,
+        false,
+        false,
+        None,
+        true,
+        true,
+        false,
+    )?;
     let ca3_file = format!("{home_path}/ca3.pubkey");
     let pub_ca3 = ca3.ca_get_pubkey_armored()?;
     std::fs::write(&ca3_file, pub_ca3).expect("Unable to write file");
