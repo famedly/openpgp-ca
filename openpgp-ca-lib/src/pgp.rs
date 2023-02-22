@@ -84,12 +84,16 @@ pub(crate) fn add_ca_domain_notation(
 ///
 /// `name` is an optional additional identifier that is added to the
 /// UserID, if it is supplied.
-pub(crate) fn make_ca_cert(domain: &str, name: Option<&str>) -> Result<(Cert, Signature)> {
+pub(crate) fn make_ca_cert(
+    domain: &str,
+    name: Option<&str>,
+    cipher_suite: Option<CipherSuite>,
+) -> Result<(Cert, Signature)> {
     // Generate key for a new CA
     let (mut ca_key, revocation) = cert::CertBuilder::new()
         // RHEL7 [eol 2026] is shipped with GnuPG 2.0.x, which doesn't
         // support ECC
-        .set_cipher_suite(CipherSuite::RSA4k)
+        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::RSA4k).into())
         .add_signing_subkey()
         // FIXME: set expiration from CLI
         // .set_validity_period()
