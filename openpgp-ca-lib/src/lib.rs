@@ -30,8 +30,15 @@
 //! //
 //! // The new private key for the user is printed to stdout and needs to be manually
 //! // processed from there.
-//! ca.user_new(Some(&"Alice"), &["alice@example.org"], None, false, false)
-//!     .unwrap();
+//! ca.user_new(
+//!     Some(&"Alice"),
+//!     &["alice@example.org"],
+//!     None,
+//!     false,
+//!     false,
+//!     None,
+//! )
+//! .unwrap();
 //! ```
 
 #[macro_use]
@@ -79,6 +86,7 @@ use crate::backend::{card, split, Backend};
 use crate::db::models;
 use crate::db::models::NewCacert;
 use crate::db::OcaDb;
+use crate::pgp::CipherSuite;
 use crate::secret::{CaSec, CaSecCB};
 use crate::storage::{CaStorageRW, DbCa, UninitDb};
 use crate::types::CertificationStatus;
@@ -917,6 +925,7 @@ impl Oca {
         duration_days: Option<u64>,
         password: bool,
         output_format_minimal: bool,
+        cipher_suite: Option<CipherSuite>,
     ) -> Result<()> {
         // storage: ca_import_tsig + user_add
 
@@ -927,6 +936,7 @@ impl Oca {
             duration_days,
             password,
             output_format_minimal,
+            cipher_suite,
         )
     }
 

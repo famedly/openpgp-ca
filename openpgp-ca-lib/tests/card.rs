@@ -29,7 +29,14 @@ fn init_on_card() -> Result<()> {
     let (_gpg, cau) = util::setup_one_uninit()?;
     let ca = cau.init_card_generate_on_card(&ident, "example.org", None, None)?;
 
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let certs = ca.user_certs_get_all()?;
     assert_eq!(certs.len(), 1);
@@ -84,7 +91,14 @@ fn init_card_import_key() -> Result<()> {
     let (_gpg, cau) = util::setup_one_uninit()?;
     let ca = cau.init_card_import_key(&ident, "example.org", ca_private.as_bytes())?;
 
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let certs = ca.user_certs_get_all()?;
     assert_eq!(certs.len(), 1);
@@ -150,7 +164,14 @@ fn init_card_import_card() -> Result<()> {
         pgp::cert_to_armored(&ca_pub)?.as_bytes(),
     )?;
 
-    ca.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    ca.user_new(
+        Some("Alice"),
+        &["alice@example.org"],
+        None,
+        false,
+        false,
+        None,
+    )?;
 
     let certs = ca.user_certs_get_all()?;
     assert_eq!(certs.len(), 1);
@@ -197,7 +218,14 @@ fn card_import_migrate() -> Result<()> {
         let cau_old = Uninit::new(ca_path.to_str())?;
         let ca_old = cau_old.init_softkey("example.org", None)?;
 
-        ca_old.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+        ca_old.user_new(
+            Some("Alice"),
+            &["alice@example.org"],
+            None,
+            false,
+            false,
+            None,
+        )?;
     }
 
     // Migrate the softkey instance to a card-backed one

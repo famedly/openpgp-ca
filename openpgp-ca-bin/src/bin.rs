@@ -223,12 +223,20 @@ fn main() -> Result<()> {
                 email,
                 name,
                 minimal,
+                cipher_suite,
             } => {
                 // TODO: key-profile?
 
                 let emails: Vec<_> = email.iter().map(String::as_str).collect();
 
-                ca.user_new(name.as_deref(), &emails[..], None, true, minimal)?;
+                ca.user_new(
+                    name.as_deref(),
+                    &emails[..],
+                    None,
+                    true,
+                    minimal,
+                    cipher_suite,
+                )?;
             }
             cli::UserCommand::AddRevocation { revocation_file } => {
                 ca.revocation_add_from_file(&revocation_file)?
