@@ -37,6 +37,9 @@
 //!     false,
 //!     false,
 //!     None,
+//!     true,
+//!     true,
+//!     false,
 //! )
 //! .unwrap();
 //! ```
@@ -924,6 +927,7 @@ impl Oca {
     ///
     /// The CA Cert is trust-signed by this new user key and the user
     /// Cert is certified by the CA.
+    #[allow(clippy::too_many_arguments)]
     pub fn user_new(
         &self,
         name: Option<&str>,
@@ -932,18 +936,23 @@ impl Oca {
         password: bool,
         output_format_minimal: bool,
         cipher_suite: Option<CipherSuite>,
+        enable_encryption_subkey: bool,
+        enable_signing_subkey: bool,
+        enable_authentication_subkey: bool,
     ) -> Result<()> {
         // storage: ca_import_tsig + user_add
-            cert::user_new(
-                self,
-                name,
-                emails,
-                duration_days,
-                password,
-                output_format_minimal,
-                cipher_suite,
-            )
-
+        cert::user_new(
+            self,
+            name,
+            emails,
+            duration_days,
+            password,
+            output_format_minimal,
+            cipher_suite,
+            enable_encryption_subkey,
+            enable_signing_subkey,
+            enable_authentication_subkey,
+        )
     }
 
     /// Import an existing OpenPGP Cert (public key) as a new OpenPGP CA user.

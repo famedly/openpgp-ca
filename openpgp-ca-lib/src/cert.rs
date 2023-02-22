@@ -19,6 +19,7 @@ use crate::secret::CaSec;
 use crate::types::CertificationStatus;
 use crate::Oca;
 
+#[allow(clippy::too_many_arguments)]
 pub fn user_new(
     oca: &Oca,
     name: Option<&str>,
@@ -27,10 +28,21 @@ pub fn user_new(
     password: bool,
     output_format_minimal: bool,
     cipher_suite: Option<CipherSuite>,
+    enable_encryption_subkey: bool,
+    enable_signing_subkey: bool,
+    enable_authentication_subkey: bool,
 ) -> Result<()> {
     // Generate new user key
-    let (user_key, user_revoc, pass) = pgp::make_user_cert(emails, name, password, cipher_suite)
-        .context("make_user_cert failed")?;
+    let (user_key, user_revoc, pass) = pgp::make_user_cert(
+        emails,
+        name,
+        password,
+        cipher_suite,
+        enable_encryption_subkey,
+        enable_signing_subkey,
+        enable_authentication_subkey,
+    )
+    .context("make_user_cert failed")?;
 
     // -- CA secret operation --
     // CA certifies user cert

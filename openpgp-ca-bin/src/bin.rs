@@ -231,6 +231,9 @@ fn main() -> Result<()> {
                 name,
                 minimal,
                 cipher_suite,
+                enable_encryption_subkey,
+                enable_signing_subkey,
+                enable_authentication_subkey,
             } => {
                 // TODO: key-profile?
 
@@ -243,6 +246,9 @@ fn main() -> Result<()> {
                     true,
                     minimal,
                     cipher_suite,
+                    enable_encryption_subkey,
+                    enable_signing_subkey,
+                    enable_authentication_subkey,
                 )?;
             }
             cli::UserCommand::AddRevocation { revocation_file } => {

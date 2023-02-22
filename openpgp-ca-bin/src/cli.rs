@@ -260,6 +260,30 @@ pub enum UserCommand {
 
         #[clap(long = "cipher-suite", help = "Set cipher suite")]
         cipher_suite: Option<CipherSuite>,
+
+        #[clap(
+            long = "encryption",
+            help = "Enable creating an encryption subkey",
+            default_value_t = true,
+            action = clap::ArgAction::Set,
+        )]
+        enable_encryption_subkey: bool,
+
+        #[clap(
+            long = "signing",
+            help = "Enable creating an signing subkey",
+            default_value_t = true,
+            action = clap::ArgAction::Set,
+        )]
+        enable_signing_subkey: bool,
+
+        #[clap(
+            long = "authentication",
+            help = "Enable creating an authentication subkey",
+            default_value_t = false,
+            action = clap::ArgAction::Set,
+        )]
+        enable_authentication_subkey: bool,
     },
 
     /// Add Revocation Certificate
