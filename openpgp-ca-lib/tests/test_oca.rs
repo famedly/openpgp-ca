@@ -66,6 +66,9 @@ fn test_ca(ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -141,6 +144,9 @@ fn test_expiring_certification(ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -397,6 +403,9 @@ fn test_ca_insert_duplicate_email(ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     // make another CA user with the same email address
@@ -407,6 +416,9 @@ fn test_ca_insert_duplicate_email(ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -565,6 +577,9 @@ fn test_ca_signatures(gpg: Ctx, ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     for user in ca.users_get_all()? {
@@ -632,6 +647,9 @@ fn test_apply_revocation(ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -776,6 +794,9 @@ fn test_revocation_no_fingerprint(gpg: Ctx, ca: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     // gpg: make key for Bob
@@ -920,6 +941,9 @@ fn test_create_user_with_pw(ca: Oca) -> Result<()> {
         true,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let certs = ca.user_certs_get_all()?;
@@ -973,6 +997,9 @@ fn test_refresh(ca: Oca) -> Result<()> {
         true,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
     ca.user_new(
         Some("Bob"),
@@ -981,6 +1008,9 @@ fn test_refresh(ca: Oca) -> Result<()> {
         true,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
     ca.user_new(
         Some("Carol"),
@@ -989,6 +1019,9 @@ fn test_refresh(ca: Oca) -> Result<()> {
         true,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
     ca.user_new(
         Some("Dave"),
@@ -997,6 +1030,9 @@ fn test_refresh(ca: Oca) -> Result<()> {
         true,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     // set dave to "inactive"
@@ -1095,6 +1131,9 @@ fn test_ca_re_certify(gpg: Ctx, ca1: Oca) -> Result<()> {
         false,
         false,
         None,
+        true,
+        true,
+        false,
     )?;
 
     let (bob, _rev) = CertBuilder::new()

@@ -174,19 +174,32 @@ pub(crate) fn make_user_cert(
     name: Option<&str>,
     password: bool,
     cipher_suite: Option<CipherSuite>,
+    enable_encryption_subkey: bool,
+    enable_signing_subkey: bool,
+    enable_authentication_subkey: bool,
 ) -> Result<(Cert, Signature, Option<String>)> {
     let pass = if password { Some(diceware()) } else { None };
 
     let mut builder = cert::CertBuilder::new()
-        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::RSA4k).into())
-        .add_subkey(
+        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::RSA4k).into());
+
+    if enable_encryption_subkey {
+        builder = builder.add_subkey(
             KeyFlags::empty()
                 .set_transport_encryption()
                 .set_storage_encryption(),
             None,
             None,
-        )
-        .add_signing_subkey();
+        );
+    }
+
+    if enable_signing_subkey {
+        builder = builder.add_signing_subkey();
+    }
+
+    if enable_authentication_subkey {
+        builder = builder.add_authentication_subkey();
+    }
 
     if let Some(pass) = &pass {
         builder = builder.set_password(Some(pass.to_owned().into()));
