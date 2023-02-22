@@ -22,7 +22,7 @@
 //!
 //! // Initialize the CA, create the CA key (with domain name and descriptive name)
 //! let ca = ca_uninit
-//!     .init_softkey("example.org", Some("Example Org OpenPGP CA Key"))
+//!     .init_softkey("example.org", Some("Example Org OpenPGP CA Key"), None)
 //!     .unwrap();
 //!
 //! // Create a new user, certified by the CA, and a trust signature by the user
@@ -269,9 +269,14 @@ impl Uninit {
     ///
     /// `domainname` is the domain that this CA Admin is in charge of,
     /// `name` is a descriptive name for the CA Admin
-    pub fn init_softkey(self, domainname: &str, name: Option<&str>) -> Result<Oca> {
+    pub fn init_softkey(
+        self,
+        domainname: &str,
+        name: Option<&str>,
+        cipher_suite: Option<CipherSuite>,
+    ) -> Result<Oca> {
         Self::check_domainname(domainname)?;
-        let (cert, _) = pgp::make_ca_cert(domainname, name)?;
+        let (cert, _) = pgp::make_ca_cert(domainname, name, cipher_suite)?;
 
         self.db
             .transaction(|| self.ca.ca_init_softkey(domainname, &cert))?;
@@ -316,6 +321,7 @@ impl Uninit {
         ident: &str,
         domain: &str,
         name: Option<&str>,
+        cipher_suite: Option<CipherSuite>,
     ) -> Result<(Oca, String)> {
         // The CA database must be uninitialized!
         if self.db.is_ca_initialized()? {
@@ -323,7 +329,7 @@ impl Uninit {
         }
 
         // Generate a new CA private key
-        let (ca_key, _) = pgp::make_ca_cert(domain, name)?;
+        let (ca_key, _) = pgp::make_ca_cert(domain, name, cipher_suite)?;
 
         // Import key material to card.
         let user_pin = card::import_to_card(ident, &ca_key)?;

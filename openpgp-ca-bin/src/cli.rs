@@ -172,6 +172,9 @@ pub enum CaCommand {
         #[clap(short = 'n', long = "name", help = "Descriptive User Name")]
         name: Option<String>,
 
+        #[clap(long = "cipher-suite", help = "Set cipher suite")]
+        cipher_suite: Option<CipherSuite>,
+
         #[clap(subcommand)]
         backend: Backend,
     },

@@ -22,7 +22,7 @@ fn alice_authenticates_bob_centralized_soft() -> Result<()> {
     let (gpg, cau) = util::setup_one_uninit()?;
 
     // make new CA key
-    let ca = cau.init_softkey("example.org", None)?;
+    let ca = cau.init_softkey("example.org", None, None)?;
 
     test_alice_authenticates_bob_centralized(gpg, ca)
 }
@@ -34,7 +34,7 @@ fn alice_authenticates_bob_centralized_card() -> Result<()> {
     util::reset_card(&ident)?;
 
     let (gpg, cau) = util::setup_one_uninit()?;
-    let (ca, _priv) = cau.init_card_generate_on_host(&ident, "example.org", None)?;
+    let (ca, _priv) = cau.init_card_generate_on_host(&ident, "example.org", None, None)?;
 
     test_alice_authenticates_bob_centralized(gpg, ca)
 }
@@ -111,7 +111,7 @@ fn test_alice_authenticates_bob_decentralized_soft() -> Result<()> {
     let (_gpg, cau) = util::setup_one_uninit()?;
 
     // make new CA key
-    let ca = cau.init_softkey("example.org", None)?;
+    let ca = cau.init_softkey("example.org", None, None)?;
 
     test_alice_authenticates_bob_decentralized(ca)
 }
@@ -123,7 +123,7 @@ fn test_alice_authenticates_bob_decentralized_card() -> Result<()> {
     util::reset_card(&ident)?;
 
     let (_gpg, cau) = util::setup_one_uninit()?;
-    let (ca, _priv) = cau.init_card_generate_on_host(&ident, "example.org", None)?;
+    let (ca, _priv) = cau.init_card_generate_on_host(&ident, "example.org", None, None)?;
 
     test_alice_authenticates_bob_decentralized(ca)
 }
@@ -238,10 +238,10 @@ fn test_bridge_soft() -> Result<()> {
     let (gpg, ca1u, ca2u) = util::setup_two_uninit()?;
 
     // make new CA key
-    let ca1 = ca1u.init_softkey("some.org", None)?;
+    let ca1 = ca1u.init_softkey("some.org", None, None)?;
 
     // make new CA key
-    let ca2 = ca2u.init_softkey("other.org", None)?;
+    let ca2 = ca2u.init_softkey("other.org", None, None)?;
 
     test_bridge(gpg, ca1, ca2)
 }
@@ -255,10 +255,10 @@ fn test_bridge_card() -> Result<()> {
     let (gpg, ca1u, ca2u) = util::setup_two_uninit()?;
 
     // CA1 lives on the card
-    let (ca1, _priv) = ca1u.init_card_generate_on_host(&ident, "some.org", None)?;
+    let (ca1, _priv) = ca1u.init_card_generate_on_host(&ident, "some.org", None, None)?;
 
     // CA2 is a softkey instance
-    let ca2 = ca2u.init_softkey("other.org", None)?;
+    let ca2 = ca2u.init_softkey("other.org", None, None)?;
 
     test_bridge(gpg, ca1, ca2)
 }
@@ -397,9 +397,9 @@ fn test_multi_bridge_soft() -> Result<()> {
     let (gpg, ca1u, ca2u, ca3u) = util::setup_three_uninit()?;
 
     // make new CA keys
-    let ca1 = ca1u.init_softkey("alpha.org", None)?;
-    let ca2 = ca2u.init_softkey("beta.org", None)?;
-    let ca3 = ca3u.init_softkey("gamma.org", None)?;
+    let ca1 = ca1u.init_softkey("alpha.org", None, None)?;
+    let ca2 = ca2u.init_softkey("beta.org", None, None)?;
+    let ca3 = ca3u.init_softkey("gamma.org", None, None)?;
 
     test_multi_bridge(gpg, ca1, ca2, ca3)
 }
@@ -413,9 +413,9 @@ fn test_multi_bridge_card() -> Result<()> {
     let (gpg, ca1u, ca2u, ca3u) = util::setup_three_uninit()?;
 
     // CA3 is card-backed, CA1 and CA2 are softkey instances
-    let ca1 = ca1u.init_softkey("alpha.org", None)?;
-    let ca2 = ca2u.init_softkey("beta.org", None)?;
-    let (ca3, _priv) = ca3u.init_card_generate_on_host(&ident, "gamma.org", None)?;
+    let ca1 = ca1u.init_softkey("alpha.org", None, None)?;
+    let ca2 = ca2u.init_softkey("beta.org", None, None)?;
+    let (ca3, _priv) = ca3u.init_card_generate_on_host(&ident, "gamma.org", None, None)?;
 
     test_multi_bridge(gpg, ca1, ca2, ca3)
 }
@@ -555,9 +555,9 @@ fn test_scoping_soft() -> Result<()> {
     let (gpg, ca1u, ca2u, ca3u) = util::setup_three_uninit()?;
 
     // make new CA keys
-    let ca1 = ca1u.init_softkey("alpha.org", None)?;
-    let ca2 = ca2u.init_softkey("beta.org", None)?;
-    let ca3 = ca3u.init_softkey("other.org", None)?;
+    let ca1 = ca1u.init_softkey("alpha.org", None, None)?;
+    let ca2 = ca2u.init_softkey("beta.org", None, None)?;
+    let ca3 = ca3u.init_softkey("other.org", None, None)?;
 
     test_scoping(gpg, ca1, ca2, ca3)
 }
@@ -571,9 +571,9 @@ fn test_scoping_card() -> Result<()> {
     let (gpg, ca1u, ca2u, ca3u) = util::setup_three_uninit()?;
 
     // CA3 is card-backed, CA1 and CA2 are softkey instances
-    let ca1 = ca1u.init_softkey("alpha.org", None)?;
-    let ca2 = ca2u.init_softkey("beta.org", None)?;
-    let (ca3, _priv) = ca3u.init_card_generate_on_host(&ident, "other.org", None)?;
+    let ca1 = ca1u.init_softkey("alpha.org", None, None)?;
+    let ca2 = ca2u.init_softkey("beta.org", None, None)?;
+    let (ca3, _priv) = ca3u.init_card_generate_on_host(&ident, "other.org", None, None)?;
 
     test_scoping(gpg, ca1, ca2, ca3)
 }

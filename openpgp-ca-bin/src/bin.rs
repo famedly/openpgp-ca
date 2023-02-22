@@ -64,13 +64,16 @@ fn main() -> Result<()> {
                 domain,
                 name,
                 backend,
+                cipher_suite,
             },
     } = &c.cmd
     {
         let cau = Uninit::new(db)?;
 
         let ca = match backend {
-            cli::Backend::Softkey => cau.init_softkey(domain, name.as_deref()),
+            cli::Backend::Softkey => {
+                cau.init_softkey(domain, name.as_deref(), cipher_suite.clone())
+            }
             cli::Backend::Card {
                 ident,
                 pinpad,
@@ -96,8 +99,12 @@ fn main() -> Result<()> {
                         println!("Initializing OpenPGP CA on card {ident}.");
                         println!();
 
-                        let (ca, key) =
-                            cau.init_card_generate_on_host(&ident, domain, name.as_deref())?;
+                        let (ca, key) = cau.init_card_generate_on_host(
+                            &ident,
+                            domain,
+                            name.as_deref(),
+                            cipher_suite.clone(),
+                        )?;
 
                         println!("Generated new CA key:\n\n{key}");
 

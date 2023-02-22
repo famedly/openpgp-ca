@@ -32,7 +32,7 @@ fn test_ca_export_wkd() -> Result<()> {
     let db = format!("{home_path}/ca.sqlite");
 
     let cau = Uninit::new(Some(&db))?;
-    let ca = cau.init_softkey("example.org", None)?;
+    let ca = cau.init_softkey("example.org", None, None)?;
 
     ca.user_new(
         Some("Alice"),
@@ -110,7 +110,7 @@ fn test_wkd_delist() -> Result<()> {
     let db = format!("{home_path}/ca.sqlite");
 
     let cau = Uninit::new(Some(&db))?;
-    let ca = cau.init_softkey("example.org", None)?;
+    let ca = cau.init_softkey("example.org", None, None)?;
 
     // make CA users
     ca.user_new(
@@ -201,7 +201,7 @@ fn test_ca_export_wkd_sequoia() -> Result<()> {
     let db = format!("{home_path}/ca.sqlite");
 
     let cau = Uninit::new(Some(&db))?;
-    let ca = cau.init_softkey("sequoia-pgp.org", None)?;
+    let ca = cau.init_softkey("sequoia-pgp.org", None, None)?;
 
     ca.cert_import_new(
         justus_key.as_bytes(),
