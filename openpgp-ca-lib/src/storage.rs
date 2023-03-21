@@ -140,10 +140,68 @@ impl QueueDb {
     }
 }
 
+pub(crate) trait CaStorage {
+    fn ca(&self) -> Result<models::Ca>;
+    fn cacert(&self) -> Result<models::Cacert>;
+
+    fn ca_get_cert_pub(&self) -> Result<Cert>;
+    fn ca_userid(&self) -> Result<UserID>;
+    fn ca_email(&self) -> Result<String>;
+
+    fn certs(&self) -> Result<Vec<models::Cert>>;
+    fn cert_by_id(&self, id: i32) -> Result<Option<models::Cert>>;
+    fn cert_by_fp(&self, fingerprint: &str) -> Result<Option<models::Cert>>;
+    fn certs_by_email(&self, email: &str) -> Result<Vec<models::Cert>>;
+    fn certs_by_user(&self, user: &models::User) -> Result<Vec<models::Cert>>;
+
+    fn emails(&self) -> Result<Vec<models::CertEmail>>;
+    fn emails_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::CertEmail>>;
+    fn user_by_cert(&self, cert: &models::Cert) -> Result<Option<models::User>>;
+    fn users_sorted_by_name(&self) -> Result<Vec<models::User>>;
+
+    fn revocation_exists(&self, revocation: &[u8]) -> Result<bool>;
+    fn revocations_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::Revocation>>;
+    fn revocation_by_hash(&self, hash: &str) -> Result<Option<models::Revocation>>;
+
+    fn list_bridges(&self) -> Result<Vec<models::Bridge>>;
+    fn bridge_by_email(&self, email: &str) -> Result<Option<models::Bridge>>;
+
+    fn queue_not_done(&self) -> Result<Vec<models::Queue>>;
+}
+
+pub(crate) trait CaStorageWrite {
+    fn ca_import_tsig(&self, cert: &[u8]) -> Result<()>;
+
+    fn cert_add(
+        &self,
+        pub_cert: &str,
+        fingerprint: &str,
+        user_id: Option<i32>,
+    ) -> Result<models::Cert>;
+    fn cert_update(&self, cert: &models::Cert) -> Result<()>;
+
+    fn user_add(
+        &self,
+        name: Option<&str>,
+        cert_fp: (&str, &str),
+        emails: &[&str],
+        revocation_certs: &[String],
+    ) -> Result<models::User>;
+
+    fn revocation_add(&self, revocation: &str, cert: &models::Cert) -> Result<models::Revocation>;
+    fn revocation_update(&self, revocation: &models::Revocation) -> Result<()>;
+
+    fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge>;
+}
+
+pub(crate) trait CaStorageRW: CaStorage + CaStorageWrite {}
+
 /// DB storage for a regular CA instance
 pub(crate) struct DbCa {
     db: Rc<OcaDb>,
 }
+
+impl CaStorageRW for DbCa {}
 
 impl DbCa {
     pub(crate) fn new(db: Rc<OcaDb>) -> Self {
@@ -161,135 +219,26 @@ impl DbCa {
     {
         self.db.transaction(f)
     }
+}
 
-    // ------
-
-    pub(crate) fn ca(&self) -> Result<models::Ca> {
+impl CaStorage for DbCa {
+    fn ca(&self) -> Result<models::Ca> {
         let (ca, _) = self.db.get_ca()?;
         Ok(ca)
     }
 
-    pub(crate) fn cacert(&self) -> Result<models::Cacert> {
+    fn cacert(&self) -> Result<models::Cacert> {
         let (_, cacert) = self.db.get_ca()?;
         Ok(cacert)
     }
 
-    pub(crate) fn ca_import_tsig(&self, cert: &[u8]) -> Result<()> {
-        self.db.ca_import_tsig(cert)
-    }
-
-    pub(crate) fn certs(&self) -> Result<Vec<models::Cert>> {
-        self.db.certs()
-    }
-
-    pub(crate) fn cert_by_id(&self, id: i32) -> Result<Option<models::Cert>> {
-        self.db.cert_by_id(id)
-    }
-
-    pub(crate) fn cert_by_fp(&self, fingerprint: &str) -> Result<Option<models::Cert>> {
-        self.db.cert_by_fp(fingerprint)
-    }
-
-    pub(crate) fn certs_by_email(&self, email: &str) -> Result<Vec<models::Cert>> {
-        self.db.certs_by_email(email)
-    }
-
-    pub(crate) fn certs_by_user(&self, user: &models::User) -> Result<Vec<models::Cert>> {
-        self.db.certs_by_user(user)
-    }
-
-    pub(crate) fn cert_add(
-        &self,
-        pub_cert: &str,
-        fingerprint: &str,
-        user_id: Option<i32>,
-    ) -> Result<models::Cert> {
-        self.db.cert_add(pub_cert, fingerprint, user_id)
-    }
-
-    pub(crate) fn cert_update(&self, cert: &models::Cert) -> Result<()> {
-        self.db.cert_update(cert)
-    }
-
-    pub(crate) fn emails(&self) -> Result<Vec<models::CertEmail>> {
-        self.db.emails()
-    }
-
-    pub(crate) fn emails_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::CertEmail>> {
-        self.db.emails_by_cert(cert)
-    }
-
-    pub(crate) fn user_by_cert(&self, cert: &models::Cert) -> Result<Option<models::User>> {
-        self.db.user_by_cert(cert)
-    }
-
-    pub(crate) fn users_sorted_by_name(&self) -> Result<Vec<models::User>> {
-        self.db.users_sorted_by_name()
-    }
-
-    pub(crate) fn user_add(
-        &self,
-        name: Option<&str>,
-        (pub_cert, fingerprint): (&str, &str),
-        emails: &[&str],
-        revocation_certs: &[String],
-    ) -> Result<models::User> {
-        self.db
-            .user_add(name, (pub_cert, fingerprint), emails, revocation_certs)
-    }
-
-    pub(crate) fn revocation_exists(&self, revocation: &[u8]) -> Result<bool> {
-        self.db.revocation_exists(revocation)
-    }
-
-    pub(crate) fn revocations_by_cert(
-        &self,
-        cert: &models::Cert,
-    ) -> Result<Vec<models::Revocation>> {
-        self.db.revocations_by_cert(cert)
-    }
-
-    pub(crate) fn revocation_by_hash(&self, hash: &str) -> Result<Option<models::Revocation>> {
-        self.db.revocation_by_hash(hash)
-    }
-
-    pub(crate) fn revocation_add(
-        &self,
-        revocation: &str,
-        cert: &models::Cert,
-    ) -> Result<models::Revocation> {
-        self.db.revocation_add(revocation, cert)
-    }
-
-    pub(crate) fn revocation_update(&self, revocation: &models::Revocation) -> Result<()> {
-        self.db.revocation_update(revocation)
-    }
-
-    pub(crate) fn list_bridges(&self) -> Result<Vec<models::Bridge>> {
-        self.db.list_bridges()
-    }
-
-    pub(crate) fn bridge_by_email(&self, email: &str) -> Result<Option<models::Bridge>> {
-        self.db.bridge_by_email(email)
-    }
-
-    pub(crate) fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge> {
-        self.db.bridge_insert(bridge)
-    }
-
-    pub(crate) fn queue_not_done(&self) -> Result<Vec<models::Queue>> {
-        self.db.queue_not_done()
-    }
-
-    // ------
-
     /// Get the Cert of the CA (without private key material).
-    pub(crate) fn ca_get_cert_pub(&self) -> Result<Cert> {
+    fn ca_get_cert_pub(&self) -> Result<Cert> {
         ca_get_cert_pub(&self.db)
     }
 
     /// Get the User ID of this CA
-    pub(crate) fn ca_userid(&self) -> Result<UserID> {
+    fn ca_userid(&self) -> Result<UserID> {
         let cert = self.ca_get_cert_pub()?;
         let uids: Vec<_> = cert.userids().collect();
 
@@ -301,7 +250,7 @@ impl DbCa {
     }
 
     /// Get the email of this CA
-    pub(crate) fn ca_email(&self) -> Result<String> {
+    fn ca_email(&self) -> Result<String> {
         let email = self.ca_userid()?.email()?;
 
         if let Some(email) = email {
@@ -309,5 +258,109 @@ impl DbCa {
         } else {
             Err(anyhow::anyhow!("CA user_id has no email"))
         }
+    }
+
+    fn certs(&self) -> Result<Vec<models::Cert>> {
+        self.db.certs()
+    }
+
+    fn cert_by_id(&self, id: i32) -> Result<Option<models::Cert>> {
+        self.db.cert_by_id(id)
+    }
+
+    fn cert_by_fp(&self, fingerprint: &str) -> Result<Option<models::Cert>> {
+        self.db.cert_by_fp(fingerprint)
+    }
+
+    fn certs_by_email(&self, email: &str) -> Result<Vec<models::Cert>> {
+        self.db.certs_by_email(email)
+    }
+
+    fn certs_by_user(&self, user: &models::User) -> Result<Vec<models::Cert>> {
+        self.db.certs_by_user(user)
+    }
+
+    fn emails(&self) -> Result<Vec<models::CertEmail>> {
+        self.db.emails()
+    }
+
+    fn emails_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::CertEmail>> {
+        self.db.emails_by_cert(cert)
+    }
+
+    fn user_by_cert(&self, cert: &models::Cert) -> Result<Option<models::User>> {
+        self.db.user_by_cert(cert)
+    }
+
+    fn users_sorted_by_name(&self) -> Result<Vec<models::User>> {
+        self.db.users_sorted_by_name()
+    }
+
+    fn revocation_exists(&self, revocation: &[u8]) -> Result<bool> {
+        self.db.revocation_exists(revocation)
+    }
+
+    fn revocations_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::Revocation>> {
+        self.db.revocations_by_cert(cert)
+    }
+
+    fn revocation_by_hash(&self, hash: &str) -> Result<Option<models::Revocation>> {
+        self.db.revocation_by_hash(hash)
+    }
+
+    fn list_bridges(&self) -> Result<Vec<models::Bridge>> {
+        self.db.list_bridges()
+    }
+
+    // ------
+
+    fn bridge_by_email(&self, email: &str) -> Result<Option<models::Bridge>> {
+        self.db.bridge_by_email(email)
+    }
+
+    fn queue_not_done(&self) -> Result<Vec<models::Queue>> {
+        self.db.queue_not_done()
+    }
+}
+
+impl CaStorageWrite for DbCa {
+    fn ca_import_tsig(&self, cert: &[u8]) -> Result<()> {
+        self.db.ca_import_tsig(cert)
+    }
+
+    fn cert_add(
+        &self,
+        pub_cert: &str,
+        fingerprint: &str,
+        user_id: Option<i32>,
+    ) -> Result<models::Cert> {
+        self.db.cert_add(pub_cert, fingerprint, user_id)
+    }
+
+    fn cert_update(&self, cert: &models::Cert) -> Result<()> {
+        self.db.cert_update(cert)
+    }
+
+    fn user_add(
+        &self,
+        name: Option<&str>,
+        (pub_cert, fingerprint): (&str, &str),
+        emails: &[&str],
+        revocation_certs: &[String],
+    ) -> Result<models::User> {
+        self.db
+            .user_add(name, (pub_cert, fingerprint), emails, revocation_certs)
+    }
+
+    fn revocation_add(&self, revocation: &str, cert: &models::Cert) -> Result<models::Revocation> {
+        self.db.revocation_add(revocation, cert)
+    }
+
+    fn revocation_update(&self, revocation: &models::Revocation) -> Result<()> {
+        self.db.revocation_update(revocation)
+    }
+
+    fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge> {
+        self.db.bridge_insert(bridge)
     }
 }

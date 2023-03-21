@@ -84,7 +84,7 @@ use crate::backend::{card, split, Backend};
 use crate::db::models;
 use crate::db::OcaDb;
 use crate::secret::{CaSec, CaSecCB};
-use crate::storage::{DbCa, UninitDb};
+use crate::storage::{CaStorageRW, DbCa, UninitDb};
 use crate::types::CertificationStatus;
 
 /// List of cards that are blank (no fingerprint in any slot)
@@ -185,7 +185,7 @@ pub struct Uninit {
 /// An initialized OpenPGP CA instance, with a configured backend.
 /// Oca exposes the main functionality of OpenPGP CA.
 pub struct Oca {
-    storage: DbCa,
+    storage: Box<dyn CaStorageRW>,
     secret: Box<dyn CaSec>,
 }
 
@@ -443,7 +443,7 @@ impl Uninit {
                 let ca_cert_pub = self.storage.ca_get_cert_pub()?;
                 let ca_sec = CaSecCB::new(Rc::new(softkey), ca_cert_pub);
 
-                let storage = DbCa::new(self.storage.db());
+                let storage = Box::new(DbCa::new(self.storage.db()));
 
                 Ok(Oca {
                     storage,
@@ -456,7 +456,7 @@ impl Uninit {
                 let ca_cert = self.storage.ca_get_cert_pub()?;
                 let ca_sec = CaSecCB::new(Rc::new(card_ca), ca_cert);
 
-                let storage = DbCa::new(self.storage.db());
+                let storage = Box::new(DbCa::new(self.storage.db()));
 
                 Ok(Oca {
                     storage,
@@ -466,7 +466,7 @@ impl Uninit {
             Backend::SplitFront => {
                 let oca_db = self.storage.db();
 
-                let storage = DbCa::new(oca_db.clone());
+                let storage = Box::new(DbCa::new(oca_db.clone()));
                 let secret = Box::new(SplitCa::new(oca_db)?);
 
                 Ok(Oca { storage, secret })
@@ -479,7 +479,7 @@ impl Uninit {
                 let ca_sec = CaSecCB::new(Rc::new(softkey), ca_cert_pub);
 
                 // FIXME: use no storage, or overlay-read only DB for inputs (?)
-                let storage = DbCa::new(self.storage.db());
+                let storage = Box::new(DbCa::new(self.storage.db()));
 
                 Ok(Oca {
                     storage,
@@ -546,6 +546,7 @@ impl Oca {
         &*self.secret
     }
 
+    /// Generate revocations for the CA key, write to output file.
     pub fn ca_generate_revocations(&self, output: PathBuf) -> Result<()> {
         self.secret.ca_generate_revocations(output)
     }
