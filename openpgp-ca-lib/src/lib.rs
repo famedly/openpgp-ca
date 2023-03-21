@@ -463,13 +463,16 @@ impl Uninit {
                     secret: Box::new(ca_sec),
                 })
             }
-            Backend::Split => {
+            Backend::SplitFront => {
                 let oca_db = self.storage.db();
 
                 let storage = DbCa::new(oca_db.clone());
                 let secret = Box::new(SplitCa::new(oca_db)?);
 
                 Ok(Oca { storage, secret })
+            }
+            Backend::SplitBack(b) => {
+                unimplemented!()
             }
         }
     }
@@ -515,7 +518,7 @@ impl Oca {
             Backend::Softkey => Err(anyhow::anyhow!(
                 "Setting card backend from softkey is not supported."
             )),
-            Backend::Split => Err(anyhow::anyhow!(
+            Backend::SplitFront | Backend::SplitBack(_) => Err(anyhow::anyhow!(
                 "Setting card backend from split mode is not supported."
             )),
         }

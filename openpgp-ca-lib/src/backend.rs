@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2022 Heiko Schaefer <heiko@schaefer.name>
+// SPDX-FileCopyrightText: 2023 Heiko Schaefer <heiko@schaefer.name>
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This file is part of OpenPGP CA
@@ -6,7 +6,7 @@
 
 //! Infrastructure for switchable OpenPGP CA Backends.
 //!
-//! The backend configuration of a CA instanceis persisted in the CA database in `ca.backend`.
+//! The backend configuration of a CA instance is persisted in the CA database in `ca.backend`.
 
 use std::fmt::Formatter;
 
@@ -19,17 +19,31 @@ pub(crate) mod split;
 #[derive(PartialEq)]
 pub(crate) enum Backend {
     Softkey,
-    Split,
     Card(Card),
+    SplitFront,
+    SplitBack(Box<Backend>),
 }
 
 impl Backend {
     pub(crate) fn from_config(backend: Option<&str>) -> anyhow::Result<Self> {
         if let Some(backend) = backend {
-            if let Some((bt, conf)) = backend.split_once(';') {
+            if backend.starts_with(&(BACKEND_TYPE_SPLIT_BACK.to_string() + "("))
+                && backend.ends_with(')')
+            {
+                let inner = &backend[BACKEND_TYPE_SPLIT_FRONT.len()..(backend.len() - 1)];
+                let inner = match inner {
+                    "" => None,
+                    s => Some(s),
+                };
+
+                let inner_backend = Self::from_config(inner)?;
+
+                Ok(Backend::SplitBack(Box::new(inner_backend)))
+            } else if backend == BACKEND_TYPE_SPLIT_FRONT {
+                Ok(Backend::SplitFront)
+            } else if let Some((bt, conf)) = backend.split_once(';') {
                 match bt {
                     BACKEND_TYPE_CARD => Ok(Backend::Card(Card::from_config(conf)?)),
-                    BACKEND_TYPE_SPLIT => Ok(Backend::Split),
                     _ => Err(anyhow!("Unsupported backend type: '{}'", bt)),
                 }
             } else {
@@ -46,8 +60,13 @@ impl Backend {
     pub(crate) fn to_config(&self) -> Option<String> {
         match self {
             Backend::Softkey => None,
-            Backend::Split => Some(format!("{};", BACKEND_TYPE_SPLIT)),
             Backend::Card(c) => Some(format!("{};{}", BACKEND_TYPE_CARD, c.to_config())),
+            Backend::SplitFront => Some(BACKEND_TYPE_SPLIT_FRONT.to_string()),
+            Backend::SplitBack(b) => Some(format!(
+                "{}({})",
+                BACKEND_TYPE_SPLIT_BACK,
+                b.to_config().unwrap_or("".to_string())
+            )),
         }
     }
 }
@@ -56,14 +75,16 @@ impl std::fmt::Display for Backend {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Backend::Softkey => write!(f, "Softkey (private key material in CA database)"),
-            Backend::Split => write!(f, "Split-mode CA instance"),
             Backend::Card(c) => write!(f, "OpenPGP card {c}"),
+            Backend::SplitFront => write!(f, "Split-mode front instance"),
+            Backend::SplitBack(b) => write!(f, "Split-mode back instance (based on: {})", *b),
         }
     }
 }
 
 const BACKEND_TYPE_CARD: &str = "card";
-const BACKEND_TYPE_SPLIT: &str = "split";
+const BACKEND_TYPE_SPLIT_FRONT: &str = "split-front";
+const BACKEND_TYPE_SPLIT_BACK: &str = "split-back";
 
 #[derive(PartialEq)]
 pub(crate) struct Card {

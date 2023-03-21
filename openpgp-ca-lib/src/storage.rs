@@ -120,7 +120,7 @@ impl UninitDb {
             models::NewCa { domainname },
             &ca,
             &cert.fingerprint().to_hex(),
-            Backend::Split.to_config().as_deref(),
+            Backend::SplitFront.to_config().as_deref(),
         )
     }
 }
