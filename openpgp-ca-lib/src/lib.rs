@@ -471,8 +471,20 @@ impl Uninit {
 
                 Ok(Oca { storage, secret })
             }
-            Backend::SplitBack(b) => {
-                unimplemented!()
+            Backend::SplitBack(inner) => {
+                // FIXME: generalize to "Softkey or Card"
+                assert!(*inner == Backend::Softkey);
+                let softkey = SoftkeyBackend::new(self.storage.ca_get_cert_private()?);
+                let ca_cert_pub = self.storage.ca_get_cert_pub()?;
+                let ca_sec = CaSecCB::new(Rc::new(softkey), ca_cert_pub);
+
+                // FIXME: use no storage, or overlay-read only DB for inputs (?)
+                let storage = DbCa::new(self.storage.db());
+
+                Ok(Oca {
+                    storage,
+                    secret: Box::new(ca_sec),
+                })
             }
         }
     }
