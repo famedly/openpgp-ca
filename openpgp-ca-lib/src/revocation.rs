@@ -17,12 +17,11 @@ use crate::Oca;
 
 /// Check if the CA database has a variant of the revocation
 /// certificate 'revocation' (according to Signature::normalized_eq()).
-fn check_for_equivalent_revocation(
-    oca: &Oca,
+pub(crate) fn check_for_equivalent_revocation(
+    revocations: Vec<models::Revocation>,
     revocation: &Signature,
-    cert: &models::Cert,
 ) -> Result<bool> {
-    for db_rev in oca.storage.revocations_by_cert(cert)? {
+    for db_rev in revocations {
         let r = pgp::to_signature(db_rev.revocation.as_bytes())
             .context("Couldn't re-armor revocation cert from CA db")?;
 
@@ -34,58 +33,8 @@ fn check_for_equivalent_revocation(
     Ok(false)
 }
 
-/// Store a new revocation in the database.
-///
-/// This implicitly searches for a cert that the revocation can be applied to.
-/// If no suitable cert is found, an error is returned.
-pub fn revocation_add(oca: &Oca, revocation: &[u8]) -> Result<()> {
-    // FIXME: move DB actions into storage layer, bind together as a transaction
-
-    // Check if this revocation already exists in db
-    if oca.storage.revocation_exists(revocation)? {
-        return Ok(()); // this revocation is already stored -> do nothing
-    }
-
-    let mut revocation =
-        pgp::to_signature(revocation).context("revocation_add: Couldn't process revocation")?;
-
-    // Find the matching cert for this revocation certificate
-    let mut cert = None;
-    // 1) Search by fingerprint, if possible
-    if let Some(issuer_fp) = pgp::get_revoc_issuer_fp(&revocation)? {
-        cert = oca.storage.cert_by_fp(&issuer_fp.to_hex())?;
-    }
-    // 2) If match by fingerprint failed: test revocation for each cert
-    if cert.is_none() {
-        cert = search_revocable_cert_by_keyid(oca, &mut revocation)?;
-    }
-
-    if let Some(cert) = cert {
-        let c = pgp::to_cert(cert.pub_cert.as_bytes())?;
-
-        // verify that revocation certificate validates with cert
-        if validate_revocation(&c, &mut revocation)? {
-            if !check_for_equivalent_revocation(oca, &revocation, &cert)? {
-                // update sig in DB
-                let armored = pgp::revoc_to_armored(&revocation, None)
-                    .context("couldn't armor revocation cert")?;
-
-                oca.storage.revocation_add(&armored, &cert)?;
-            }
-
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!(format!(
-                "Revocation couldn't be matched to a cert:\n{revocation:?}"
-            )))
-        }
-    } else {
-        Err(anyhow::anyhow!("Couldn't find cert for this fingerprint"))
-    }
-}
-
 /// Verify that `revoc_cert` can be used to revoke the primary key of `cert`.
-fn validate_revocation(cert: &Cert, revocation: &mut Signature) -> Result<bool> {
+pub(crate) fn validate_revocation(cert: &Cert, revocation: &mut Signature) -> Result<bool> {
     let before = cert.primary_key().self_revocations().count();
 
     let revoked = cert.to_owned().insert_packets(revocation.to_owned())?;
@@ -105,8 +54,8 @@ fn validate_revocation(cert: &Cert, revocation: &mut Signature) -> Result<bool> 
 /// Search a matching cert for `revoc` based on KeyID equality.
 ///
 /// (This is used when the revocation has no issuer fingerprint)
-fn search_revocable_cert_by_keyid(
-    oca: &Oca,
+pub(crate) fn search_revocable_cert_by_keyid(
+    certs: Vec<models::Cert>,
     revoc: &mut Signature,
 ) -> Result<Option<models::Cert>> {
     let revoc_keyhandles = revoc.get_issuers();
@@ -114,7 +63,7 @@ fn search_revocable_cert_by_keyid(
         return Err(anyhow::anyhow!("Signature has no issuer KeyID"));
     }
 
-    for db_cert in oca.user_certs_get_all()? {
+    for db_cert in certs {
         let c = pgp::to_cert(db_cert.pub_cert.as_bytes())?;
 
         // require that keyid of cert and Signature issuer match

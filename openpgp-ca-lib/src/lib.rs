@@ -1081,7 +1081,7 @@ impl Oca {
     /// Verifies that applying the revocation cert can be validated by the
     /// cert. Only if this is successful is the revocation stored.
     pub fn revocation_add(&self, revoc_cert: &[u8]) -> Result<()> {
-        revocation::revocation_add(self, revoc_cert)
+        self.storage.revocation_add(revoc_cert)
     }
 
     /// Add a revocation certificate to the OpenPGP CA database (from a file).

@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use diesel::result::Error;
 use sequoia_openpgp::packet::UserID;
 use sequoia_openpgp::Cert;
@@ -192,7 +192,7 @@ pub(crate) trait CaStorageWrite {
         revocation_certs: &[String],
     ) -> Result<models::User>;
 
-    fn revocation_add(&self, revocation: &str, cert: &models::Cert) -> Result<models::Revocation>;
+    fn revocation_add(&self, revocation: &[u8]) -> Result<()>;
     fn revocation_update(&self, revocation: &models::Revocation) -> Result<()>;
 
     fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge>;
@@ -360,8 +360,61 @@ impl CaStorageWrite for DbCa {
             .user_add(name, (pub_cert, fingerprint), emails, revocation_certs)
     }
 
-    fn revocation_add(&self, revocation: &str, cert: &models::Cert) -> Result<models::Revocation> {
-        self.db.revocation_add(revocation, cert)
+    /// Store a new revocation in the database.
+    ///
+    /// This implicitly searches for a cert that the revocation can be applied to.
+    /// If no suitable cert is found, an error is returned.
+    fn revocation_add(&self, revocation: &[u8]) -> Result<()> {
+        self.transaction(|| {
+            // Check if this revocation already exists in db
+            if self.revocation_exists(revocation)? {
+                return Ok(()); // this revocation is already stored -> do nothing
+            }
+
+            let mut revocation = pgp::to_signature(revocation)
+                .context("revocation_add: Couldn't process revocation")?;
+
+            // Find the matching cert for this revocation certificate
+            let mut cert = None;
+            // 1) Search by fingerprint, if possible
+            if let Some(issuer_fp) = pgp::get_revoc_issuer_fp(&revocation)? {
+                cert = self.cert_by_fp(&issuer_fp.to_hex())?;
+            }
+            // 2) If match by fingerprint failed: test revocation for each cert
+            if cert.is_none() {
+                cert = crate::revocation::search_revocable_cert_by_keyid(
+                    self.certs()?,
+                    &mut revocation,
+                )?;
+            }
+
+            if let Some(cert) = cert {
+                let c = pgp::to_cert(cert.pub_cert.as_bytes())?;
+
+                // verify that revocation certificate validates with cert
+                if crate::revocation::validate_revocation(&c, &mut revocation)? {
+                    let revocations = self.revocations_by_cert(&cert)?;
+                    if !crate::revocation::check_for_equivalent_revocation(
+                        revocations,
+                        &revocation,
+                    )? {
+                        // update sig in DB
+                        let armored = pgp::revoc_to_armored(&revocation, None)
+                            .context("couldn't armor revocation cert")?;
+
+                        let _ = self.db.revocation_add(&armored, &cert)?;
+                    }
+
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!(format!(
+                        "Revocation couldn't be matched to a cert:\n{revocation:?}"
+                    )))
+                }
+            } else {
+                Err(anyhow::anyhow!("Couldn't find cert for this fingerprint"))
+            }
+        })
     }
 
     fn revocation_update(&self, revocation: &models::Revocation) -> Result<()> {
