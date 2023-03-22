@@ -39,6 +39,8 @@ fn check_for_equivalent_revocation(
 /// This implicitly searches for a cert that the revocation can be applied to.
 /// If no suitable cert is found, an error is returned.
 pub fn revocation_add(oca: &Oca, revocation: &[u8]) -> Result<()> {
+    // FIXME: move DB actions into storage layer, bind together as a transaction
+
     // Check if this revocation already exists in db
     if oca.storage.revocation_exists(revocation)? {
         return Ok(()); // this revocation is already stored -> do nothing
@@ -134,6 +136,8 @@ fn search_revocable_cert_by_keyid(
 /// Merge a revocation into the cert that it applies to, thus revoking that
 /// cert in the OpenPGP CA database.
 pub fn revocation_apply(oca: &Oca, mut db_revoc: models::Revocation) -> Result<()> {
+    // FIXME: move DB actions into storage layer, bind together as a transaction
+
     if let Some(mut db_cert) = oca.storage.cert_by_id(db_revoc.cert_id)? {
         let sig = pgp::to_signature(db_revoc.revocation.as_bytes())?;
         let c = pgp::to_cert(db_cert.pub_cert.as_bytes())?;

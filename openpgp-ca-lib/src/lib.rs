@@ -521,8 +521,7 @@ impl Oca {
                 // Update backend configuration in database
                 let ca_pub = pgp::cert_to_armored(&ca_cert)?;
 
-                let db = UninitDb::new(self.storage.db());
-
+                let db = self.storage.into_uninit();
                 CardBackend::ca_replace_in_place(&db, card_ident, user_pin, &ca_pub)?;
 
                 Ok(())
@@ -552,8 +551,7 @@ impl Oca {
     }
 
     pub fn ca_import_tsig(&self, cert: &[u8]) -> Result<()> {
-        self.storage
-            .transaction(|| self.storage.ca_import_tsig(cert))
+        self.storage.ca_import_tsig(cert)
     }
 
     pub fn ca_get_cert_pub(&self) -> Result<Cert> {
@@ -614,16 +612,15 @@ impl Oca {
         Ok(())
     }
 
-    /// Find all User IDs that have been certified by `cert_old` and re-certify them
+    /// Find all User IDs that have been certified by `ca_cert_old` and re-certify them
     /// with the current CA key.
     ///
     /// This can be useful after CA key rotation: when the CA has a new key, `ca_re_certify` issues
     /// fresh certifications for all previously CA-certified user certs.
-    pub fn ca_re_certify(&self, cert_old: &[u8], validity_days: u64) -> Result<()> {
-        let cert_old = pgp::to_cert(cert_old)?;
+    pub fn ca_re_certify(&self, ca_cert_old: &[u8], validity_days: u64) -> Result<()> {
+        let ca_cert_old = pgp::to_cert(ca_cert_old)?;
 
-        self.storage
-            .transaction(|| cert::certs_re_certify(self, cert_old, validity_days))
+        cert::certs_re_certify(self, ca_cert_old, validity_days)
     }
 
     /// Export certification requests for the backing CA in a simple human-readable output format
@@ -794,9 +791,7 @@ impl Oca {
         threshold_days: u64,
         validity_days: u64,
     ) -> Result<()> {
-        self.storage.transaction(|| {
-            cert::certs_refresh_ca_certifications(self, threshold_days, validity_days)
-        })
+        cert::certs_refresh_ca_certifications(self, threshold_days, validity_days)
     }
 
     /// Create a new OpenPGP CA User.
@@ -816,16 +811,16 @@ impl Oca {
         password: bool,
         output_format_minimal: bool,
     ) -> Result<()> {
-        self.storage.transaction(|| {
-            cert::user_new(
-                self,
-                name,
-                emails,
-                duration_days,
-                password,
-                output_format_minimal,
-            )
-        })
+        // storage: ca_import_tsig + user_add
+
+        cert::user_new(
+            self,
+            name,
+            emails,
+            duration_days,
+            password,
+            output_format_minimal,
+        )
     }
 
     /// Import an existing OpenPGP Cert (public key) as a new OpenPGP CA user.
@@ -849,16 +844,13 @@ impl Oca {
         emails: &[&str],
         duration_days: Option<u64>,
     ) -> Result<()> {
-        self.storage.transaction(|| {
-            cert::cert_import_new(self, cert, revoc_certs, name, emails, duration_days)
-        })
+        cert::cert_import_new(self, cert, revoc_certs, name, emails, duration_days)
     }
 
     /// Update existing Cert in database (e.g. if the user has extended
     /// the expiry date)
     pub fn cert_import_update(&self, cert: &[u8]) -> Result<()> {
-        self.storage
-            .transaction(|| cert::cert_import_update(self, cert))
+        cert::cert_import_update(self, cert)
     }
 
     /// Mark a cert as "delisted" in the OpenPGP CA database.
@@ -874,16 +866,16 @@ impl Oca {
     /// serve the latest version of a cert to third parties, so they can learn
     /// about e.g. revocations on the cert)
     pub fn cert_delist(&self, fp: &str) -> Result<()> {
-        self.storage.transaction(|| {
-            let cert = self.cert_get_by_fingerprint(fp)?;
+        // FIXME: move DB actions into storage layer, bind together as a transaction
 
-            if let Some(mut cert) = cert {
-                cert.delisted = true;
-                self.storage.cert_update(&cert)
-            } else {
-                Err(anyhow::anyhow!("Cert not found"))
-            }
-        })
+        let cert = self.cert_get_by_fingerprint(fp)?;
+
+        if let Some(mut cert) = cert {
+            cert.delisted = true;
+            self.storage.cert_update(&cert)
+        } else {
+            Err(anyhow::anyhow!("Cert not found"))
+        }
     }
 
     /// Mark a certificate as "deactivated".
@@ -893,16 +885,16 @@ impl Oca {
     /// This approach is probably appropriate in most cases to phase out a
     /// certificate.
     pub fn cert_deactivate(&self, fp: &str) -> Result<()> {
-        self.storage.transaction(|| {
-            let cert = self.cert_get_by_fingerprint(fp)?;
+        // FIXME: move DB actions into storage layer, bind together as a transaction
 
-            if let Some(mut cert) = cert {
-                cert.inactive = true;
-                self.storage.cert_update(&cert)
-            } else {
-                Err(anyhow::anyhow!("Cert not found"))
-            }
-        })
+        let cert = self.cert_get_by_fingerprint(fp)?;
+
+        if let Some(mut cert) = cert {
+            cert.inactive = true;
+            self.storage.cert_update(&cert)
+        } else {
+            Err(anyhow::anyhow!("Cert not found"))
+        }
     }
 
     /// Get Cert by fingerprint.
@@ -1089,15 +1081,14 @@ impl Oca {
     /// Verifies that applying the revocation cert can be validated by the
     /// cert. Only if this is successful is the revocation stored.
     pub fn revocation_add(&self, revoc_cert: &[u8]) -> Result<()> {
-        self.storage
-            .transaction(|| revocation::revocation_add(self, revoc_cert))
+        revocation::revocation_add(self, revoc_cert)
     }
 
     /// Add a revocation certificate to the OpenPGP CA database (from a file).
     pub fn revocation_add_from_file(&self, filename: &Path) -> Result<()> {
         let rev = std::fs::read(filename)?;
 
-        self.storage.transaction(|| self.revocation_add(&rev))
+        self.revocation_add(&rev)
     }
 
     /// Get a Revocation by hash
@@ -1113,8 +1104,7 @@ impl Oca {
     ///
     /// The revocation is merged into out copy of the OpenPGP Cert.
     pub fn revocation_apply(&self, revoc: models::Revocation) -> Result<()> {
-        self.storage
-            .transaction(|| revocation::revocation_apply(self, revoc))
+        revocation::revocation_apply(self, revoc)
     }
 
     /// Get reason and creation time for a Revocation
@@ -1217,16 +1207,11 @@ impl Oca {
         commit: bool,
     ) -> Result<()> {
         if commit {
-            self.storage.transaction::<_, anyhow::Error, _>(|| {
-                let (bridge, fingerprint) =
-                    bridge::bridge_new(self, key_file, email, scope, unscoped)?;
+            let (bridge, fingerprint) = bridge::bridge_new(self, key_file, email, scope, unscoped)?;
 
-                println!("Signed OpenPGP key for {} as bridge.\n", bridge.email);
-                println!("The fingerprint of the remote CA key is");
-                println!("{fingerprint}\n");
-
-                Ok(())
-            })?;
+            println!("Signed OpenPGP key for {} as bridge.\n", bridge.email);
+            println!("The fingerprint of the remote CA key is");
+            println!("{fingerprint}\n");
         } else {
             println!("Bridge creation DRY RUN.");
             println!();
@@ -1247,6 +1232,7 @@ impl Oca {
             to commit the OpenPGP CA bridge to the database."
             );
         }
+
         Ok(())
     }
 
@@ -1256,8 +1242,7 @@ impl Oca {
     /// Both the revoked remote public key and the revocation cert are
     /// printed to stdout.
     pub fn bridge_revoke(&self, email: &str) -> Result<()> {
-        self.storage
-            .transaction(|| bridge::bridge_revoke(self, email))
+        bridge::bridge_revoke(self, email)
     }
 
     pub fn print_bridges(&self, email: Option<String>) -> Result<()> {
@@ -1327,10 +1312,7 @@ impl Oca {
     /// storage.
     pub fn update_from_wkd(&self) -> Result<()> {
         for c in self.user_certs_get_all()? {
-            match self
-                .storage
-                .transaction(|| update::update_from_wkd(self, &c))
-            {
+            match update::update_from_wkd(self, &c) {
                 Ok(true) => {
                     println!("Got update for cert {}", c.fingerprint);
                 }
@@ -1345,10 +1327,11 @@ impl Oca {
         Ok(())
     }
 
-    /// Update all certs from keyserver
+    /// Update all certs from the hagrid keyserver (<https://keys.openpgp.org/>)
+    /// and merge any updates into our local storage for this cert.
     pub fn update_from_keyserver(&self) -> Result<()> {
         for c in self.user_certs_get_all()? {
-            match self.update_from_hagrid(&c) {
+            match update::update_from_hagrid(self, &c) {
                 Ok(true) => {
                     println!("Got update for cert {}", c.fingerprint);
                 }
@@ -1361,15 +1344,5 @@ impl Oca {
             }
         }
         Ok(())
-    }
-
-    /// Pull updates for a cert from the hagrid keyserver
-    /// (<https://keys.openpgp.org/>) and merge any updates into our local
-    /// storage for this cert.
-    ///
-    /// Returns "true" if updated data was received, false if not.
-    pub fn update_from_hagrid(&self, cert: &models::Cert) -> Result<bool> {
-        self.storage
-            .transaction(|| update::update_from_hagrid(self, cert))
     }
 }

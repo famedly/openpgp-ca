@@ -48,6 +48,8 @@ pub fn update_from_wkd(oca: &Oca, cert: &models::Cert) -> Result<bool> {
         }
     }
 
+    // FIXME: use "update/merge" storage primitive?
+
     if merged != orig {
         let mut db_update = cert.clone();
         db_update.pub_cert = pgp::cert_to_armored(&merged)?;
@@ -62,6 +64,8 @@ pub fn update_from_wkd(oca: &Oca, cert: &models::Cert) -> Result<bool> {
 
 /// Update a cert in the OpenPGP CA database from the "Hagrid" keyserver at
 /// `keys.openpgp.org`
+///
+/// Returns "true" if updated data was received, false if not.
 pub fn update_from_hagrid(oca: &Oca, cert: &models::Cert) -> Result<bool> {
     let fp = (cert.fingerprint).parse::<Fingerprint>()?;
 
@@ -72,6 +76,8 @@ pub fn update_from_hagrid(oca: &Oca, cert: &models::Cert) -> Result<bool> {
 
     let rt = Runtime::new()?;
     let update = rt.block_on(async move { hagrid.get(&KeyID::from(fp)).await })?;
+
+    // FIXME: use "update/merge" storage primitive?
 
     // Merge new certificate information into existing cert.
     // (Silently ignore potential errors from merge_public())

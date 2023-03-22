@@ -40,21 +40,25 @@ pub fn user_new(
 
     let tsigned_ca = pgp::cert_to_armored_private_key(&tsigned_ca)?;
 
-    // Store tsig for the CA cert
-    oca.storage.ca_import_tsig(tsigned_ca.as_bytes())?;
-
     // Store new user cert in DB
     let user_cert = pgp::cert_to_armored(&user_certified)?;
     let user_revoc = pgp::revoc_to_armored(&user_revoc, None)?;
 
-    oca.storage
-        .user_add(
-            name,
-            (&user_cert, &user_key.fingerprint().to_hex()),
-            emails,
-            &[user_revoc],
-        )
-        .context("Failed to insert new user into DB")?;
+    {
+        // FIXME: move DB actions into storage layer, bind together as a transaction
+
+        // Store tsig for the CA cert
+        oca.storage.ca_import_tsig(tsigned_ca.as_bytes())?;
+
+        oca.storage
+            .user_add(
+                name,
+                (&user_cert, &user_key.fingerprint().to_hex()),
+                emails,
+                &[user_revoc],
+            )
+            .context("Failed to insert new user into DB")?;
+    }
 
     // the private key needs to be handed over to the user -> print it
     let private = pgp::cert_to_armored_private_key(&user_certified)?;
@@ -92,6 +96,8 @@ pub fn cert_import_new(
     emails: &[&str],
     duration_days: Option<u64>,
 ) -> Result<()> {
+    // FIXME
+
     let user_cert =
         pgp::to_cert(user_cert).context("cert_import_new: Couldn't process user cert.")?;
 
@@ -152,6 +158,8 @@ pub fn cert_import_new(
 }
 
 pub fn cert_import_update(oca: &Oca, cert: &[u8]) -> Result<()> {
+    // FIXME: move DB actions into storage layer, bind together as a transaction
+
     let cert_new = pgp::to_cert(cert).context("cert_import_update: couldn't process cert")?;
 
     let fp = cert_new.fingerprint().to_hex();
@@ -207,6 +215,10 @@ pub fn certs_refresh_ca_certifications(
     threshold_days: u64,
     validity_days: u64,
 ) -> Result<()> {
+    // FIXME: move DB actions into storage layer, bind together as a transaction
+
+    // FIXME: fail/report individual certification problems?
+
     let threshold_time =
         SystemTime::now() + Duration::from_secs(threshold_days * pgp::SECONDS_IN_DAY);
 
@@ -255,6 +267,10 @@ pub fn certs_refresh_ca_certifications(
 
 pub fn certs_re_certify(oca: &Oca, cert_old: Cert, validity_days: u64) -> Result<()> {
     // FIXME: de-deduplicate code with certs_refresh_ca_certifications()?
+
+    // FIXME: move DB actions into storage layer, bind together as a transaction
+
+    // FIXME: fail/report individual certification problems?
 
     for db_cert in oca
         .storage

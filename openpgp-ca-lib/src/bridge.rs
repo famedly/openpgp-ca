@@ -96,6 +96,8 @@ pub fn bridge_new(
         .secret()
         .bridge_to_remote_ca(remote_ca_cert, scope_regexes)?;
 
+    // FIXME: move DB actions into storage layer, bind together as a transaction
+
     // store new bridge in DB
     let db_cert = oca.storage.cert_add(
         &pgp::cert_to_armored(&bridged)?,
@@ -118,6 +120,8 @@ pub fn bridge_new(
 }
 
 pub fn bridge_revoke(oca: &Oca, email: &str) -> Result<()> {
+    // FIXME: db operations should be bracketed in a transaction
+
     if let Some(bridge) = oca.storage.bridge_by_email(email)? {
         if let Some(mut db_cert) = oca.storage.cert_by_id(bridge.cert_id)? {
             let bridge_cert = pgp::to_cert(db_cert.pub_cert.as_bytes())?;
@@ -132,6 +136,8 @@ pub fn bridge_revoke(oca: &Oca, email: &str) -> Result<()> {
                 email,
                 pgp::revoc_to_armored(&revocation, None)?
             );
+
+            // FIXME: use "update/merge" storage primitive?
 
             // Save updated cert (including the revocation) to DB
             db_cert.pub_cert = pgp::cert_to_armored(&revoked)?;

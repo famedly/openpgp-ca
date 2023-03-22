@@ -170,6 +170,10 @@ pub(crate) trait CaStorage {
 }
 
 pub(crate) trait CaStorageWrite {
+    fn into_uninit(self: Box<Self>) -> UninitDb;
+
+    fn cacert_update(self, cacert: &models::Cacert) -> Result<()>;
+
     fn ca_import_tsig(&self, cert: &[u8]) -> Result<()>;
 
     fn cert_add(
@@ -206,10 +210,6 @@ impl CaStorageRW for DbCa {}
 impl DbCa {
     pub(crate) fn new(db: Rc<OcaDb>) -> Self {
         Self { db }
-    }
-
-    pub(crate) fn db(self) -> Rc<OcaDb> {
-        self.db
     }
 
     pub(crate) fn transaction<T, E, F>(&self, f: F) -> Result<T, E>
@@ -324,8 +324,16 @@ impl CaStorage for DbCa {
 }
 
 impl CaStorageWrite for DbCa {
+    fn into_uninit(self: Box<Self>) -> UninitDb {
+        UninitDb::new(self.db)
+    }
+
+    fn cacert_update(self, cacert: &models::Cacert) -> Result<()> {
+        self.db.cacert_update(cacert)
+    }
+
     fn ca_import_tsig(&self, cert: &[u8]) -> Result<()> {
-        self.db.ca_import_tsig(cert)
+        self.transaction(|| self.db.ca_import_tsig(cert))
     }
 
     fn cert_add(
