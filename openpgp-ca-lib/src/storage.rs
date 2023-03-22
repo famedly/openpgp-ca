@@ -6,7 +6,7 @@ use std::rc::Rc;
 use anyhow::{Context, Result};
 use diesel::result::Error;
 use sequoia_openpgp::packet::UserID;
-use sequoia_openpgp::Cert;
+use sequoia_openpgp::{Cert, Packet};
 
 use crate::backend::Backend;
 use crate::db::models::NewQueue;
@@ -193,7 +193,7 @@ pub(crate) trait CaStorageWrite {
     ) -> Result<models::User>;
 
     fn revocation_add(&self, revocation: &[u8]) -> Result<()>;
-    fn revocation_update(&self, revocation: &models::Revocation) -> Result<()>;
+    fn revocation_apply(&self, db_revoc: models::Revocation) -> Result<()>;
 
     fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge>;
 }
@@ -417,8 +417,34 @@ impl CaStorageWrite for DbCa {
         })
     }
 
-    fn revocation_update(&self, revocation: &models::Revocation) -> Result<()> {
-        self.db.revocation_update(revocation)
+    /// Merge a revocation into the cert that it applies to, thus revoking that
+    /// cert in the OpenPGP CA database.
+    fn revocation_apply(&self, mut db_revoc: models::Revocation) -> Result<()> {
+        self.transaction(|| {
+            if let Some(mut db_cert) = self.db.cert_by_id(db_revoc.cert_id)? {
+                let sig = pgp::to_signature(db_revoc.revocation.as_bytes())?;
+                let c = pgp::to_cert(db_cert.pub_cert.as_bytes())?;
+
+                let revocation: Packet = sig.into();
+                let revoked = c.insert_packets(vec![revocation])?;
+
+                db_cert.pub_cert = pgp::cert_to_armored(&revoked)?;
+
+                db_revoc.published = true;
+
+                self.db
+                    .cert_update(&db_cert)
+                    .context("Couldn't update Cert")?;
+
+                self.db
+                    .revocation_update(&db_revoc)
+                    .context("Couldn't update Revocation")?;
+
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("Couldn't find cert for apply_revocation"))
+            }
+        })
     }
 
     fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge> {

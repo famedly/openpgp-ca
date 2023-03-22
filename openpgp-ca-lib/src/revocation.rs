@@ -1,4 +1,4 @@
-// Copyright 2019-2022 Heiko Schaefer <heiko@schaefer.name>
+// Copyright 2019-2023 Heiko Schaefer <heiko@schaefer.name>
 //
 // This file is part of OpenPGP CA
 // https://gitlab.com/openpgp-ca/openpgp-ca
@@ -8,12 +8,11 @@
 
 use anyhow::{Context, Result};
 use sequoia_openpgp::packet::Signature;
+use sequoia_openpgp::Cert;
 use sequoia_openpgp::KeyHandle;
-use sequoia_openpgp::{Cert, Packet};
 
 use crate::db::models;
 use crate::pgp;
-use crate::Oca;
 
 /// Check if the CA database has a variant of the revocation
 /// certificate 'revocation' (according to Signature::normalized_eq()).
@@ -80,34 +79,4 @@ pub(crate) fn search_revocable_cert_by_keyid(
         }
     }
     Ok(None)
-}
-
-/// Merge a revocation into the cert that it applies to, thus revoking that
-/// cert in the OpenPGP CA database.
-pub fn revocation_apply(oca: &Oca, mut db_revoc: models::Revocation) -> Result<()> {
-    // FIXME: move DB actions into storage layer, bind together as a transaction
-
-    if let Some(mut db_cert) = oca.storage.cert_by_id(db_revoc.cert_id)? {
-        let sig = pgp::to_signature(db_revoc.revocation.as_bytes())?;
-        let c = pgp::to_cert(db_cert.pub_cert.as_bytes())?;
-
-        let revocation: Packet = sig.into();
-        let revoked = c.insert_packets(vec![revocation])?;
-
-        db_cert.pub_cert = pgp::cert_to_armored(&revoked)?;
-
-        db_revoc.published = true;
-
-        oca.storage
-            .cert_update(&db_cert)
-            .context("Couldn't update Cert")?;
-
-        oca.storage
-            .revocation_update(&db_revoc)
-            .context("Couldn't update Revocation")?;
-
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!("Couldn't find cert for apply_revocation"))
-    }
 }
