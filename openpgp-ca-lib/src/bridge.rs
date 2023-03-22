@@ -1,9 +1,4 @@
-// Copyright 2019-2022 Heiko Schaefer <heiko@schaefer.name>
-//
-// This file is part of OpenPGP CA
-// https://gitlab.com/openpgp-ca/openpgp-ca
-//
-// SPDX-FileCopyrightText: 2019-2022 Heiko Schaefer <heiko@schaefer.name>
+// SPDX-FileCopyrightText: 2019-2023 Heiko Schaefer <heiko@schaefer.name>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::path::Path;
@@ -88,35 +83,25 @@ pub fn bridge_new(
     };
 
     let regex = domain_to_regex(scope)?;
-
     let scope_regexes = if unscoped { vec![] } else { vec![regex] };
 
+    // -- CA secret operation --
+
     // Make trust signature on the remote CA cert, to set up the bridge
-    let bridged = oca
+    let remote_ca = oca
         .secret()
         .bridge_to_remote_ca(remote_ca_cert, scope_regexes)?;
 
-    // FIXME: move DB actions into storage layer, bind together as a transaction
+    let remote_armored = pgp::cert_to_armored(&remote_ca)?;
+    let remote_fp = remote_ca.fingerprint().to_hex();
 
-    // store new bridge in DB
-    let db_cert = oca.storage.cert_add(
-        &pgp::cert_to_armored(&bridged)?,
-        &bridged.fingerprint().to_hex(),
-        None,
-    )?;
+    // -- CA storage operation --
 
-    let ca_db = oca.storage.ca()?;
-    let new_bridge = models::NewBridge {
-        email: &email,
-        scope,
-        cert_id: db_cert.id,
-        cas_id: ca_db.id,
-    };
+    let bridge_db = oca
+        .storage
+        .bridge_add(&remote_armored, &remote_fp, &email, scope)?;
 
-    Ok((
-        oca.storage.bridge_insert(new_bridge)?,
-        bridged.fingerprint(),
-    ))
+    Ok((bridge_db, remote_ca.fingerprint()))
 }
 
 pub fn bridge_revoke(oca: &Oca, email: &str) -> Result<()> {

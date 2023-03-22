@@ -195,7 +195,13 @@ pub(crate) trait CaStorageWrite {
     fn revocation_add(&self, revocation: &[u8]) -> Result<()>;
     fn revocation_apply(&self, db_revoc: models::Revocation) -> Result<()>;
 
-    fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge>;
+    fn bridge_add(
+        &self,
+        remote_armored: &str,
+        remote_fp: &str,
+        remote_email: &str,
+        scope: &str,
+    ) -> Result<models::Bridge>;
 }
 
 pub(crate) trait CaStorageRW: CaStorage + CaStorageWrite {}
@@ -447,7 +453,25 @@ impl CaStorageWrite for DbCa {
         })
     }
 
-    fn bridge_insert(&self, bridge: models::NewBridge) -> Result<models::Bridge> {
-        self.db.bridge_insert(bridge)
+    fn bridge_add(
+        &self,
+        remote_armored: &str,
+        remote_fp: &str,
+        remote_email: &str,
+        scope: &str,
+    ) -> Result<models::Bridge> {
+        self.transaction(|| {
+            // Cert of remote CA
+            let db_cert = self.cert_add(remote_armored, remote_fp, None)?;
+
+            // Add entry for bridge in our database
+            let new_bridge = models::NewBridge {
+                email: remote_email,
+                scope,
+                cert_id: db_cert.id,
+                cas_id: self.ca()?.id,
+            };
+            self.db.bridge_insert(new_bridge)
+        })
     }
 }

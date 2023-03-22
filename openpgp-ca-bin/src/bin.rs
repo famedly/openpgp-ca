@@ -6,7 +6,7 @@
 
 use anyhow::Result;
 use clap::{CommandFactory, FromArgMatches};
-use openpgp_ca_lib::{Oca, Uninit};
+use openpgp_ca_lib::{pgp, Oca, Uninit};
 
 mod cli;
 
@@ -347,13 +347,35 @@ fn main() -> Result<()> {
                 scope,
                 remote_key_file,
                 commit,
-            } => ca.add_bridge(
-                email.as_deref(),
-                &remote_key_file,
-                scope.as_deref(),
-                false,
-                commit,
-            )?,
+            } => {
+                if commit {
+                    let (email, fp) =
+                        ca.add_bridge(email.as_deref(), &remote_key_file, scope.as_deref(), false)?;
+
+                    println!("Signed OpenPGP key for {} as bridge.\n", email);
+                    println!("The fingerprint of the remote CA key is");
+                    println!("{fp}\n");
+                } else {
+                    println!("Bridge creation DRY RUN.");
+                    println!();
+
+                    println!(
+                        "Please verify that this is the correct fingerprint for the \
+            remote CA admin before continuing:"
+                    );
+                    println!();
+
+                    let key = std::fs::read(remote_key_file)?;
+                    pgp::print_cert_info(&key)?;
+
+                    println!();
+                    println!(
+                        "When you've confirmed that the remote key is correct, repeat \
+            this command with the additional parameter '--commit' \
+            to commit the OpenPGP CA bridge to the database."
+                    );
+                }
+            }
             cli::BridgeCommand::Revoke { email } => ca.bridge_revoke(&email)?,
             cli::BridgeCommand::List => ca.list_bridges()?,
             cli::BridgeCommand::Export { email } => ca.print_bridges(email)?,

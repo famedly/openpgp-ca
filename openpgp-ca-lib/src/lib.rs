@@ -1204,36 +1204,10 @@ impl Oca {
         key_file: &Path,
         scope: Option<&str>,
         unscoped: bool,
-        commit: bool,
-    ) -> Result<()> {
-        if commit {
-            let (bridge, fingerprint) = bridge::bridge_new(self, key_file, email, scope, unscoped)?;
+    ) -> Result<(String, String)> {
+        let (bridge, fingerprint) = bridge::bridge_new(self, key_file, email, scope, unscoped)?;
 
-            println!("Signed OpenPGP key for {} as bridge.\n", bridge.email);
-            println!("The fingerprint of the remote CA key is");
-            println!("{fingerprint}\n");
-        } else {
-            println!("Bridge creation DRY RUN.");
-            println!();
-
-            println!(
-                "Please verify that this is the correct fingerprint for the \
-            remote CA admin before continuing:"
-            );
-            println!();
-
-            let key = std::fs::read(key_file)?;
-            pgp::print_cert_info(&key)?;
-
-            println!();
-            println!(
-                "When you've confirmed that the remote key is correct, repeat \
-            this command with the additional parameter '--commit' \
-            to commit the OpenPGP CA bridge to the database."
-            );
-        }
-
-        Ok(())
+        Ok((bridge.email, fingerprint.to_string()))
     }
 
     /// Create a revocation Certificate for a Bridge and apply it the our
