@@ -190,6 +190,7 @@ pub(crate) trait CaStorageWrite {
         cert_fp: (&str, &str),
         emails: &[&str],
         revocation_certs: &[String],
+        ca_cert_tsigned: Option<&[u8]>,
     ) -> Result<models::User>;
 
     fn revocation_add(&self, revocation: &[u8]) -> Result<()>;
@@ -338,8 +339,8 @@ impl CaStorageWrite for DbCa {
         self.db.cacert_update(cacert)
     }
 
-    fn ca_import_tsig(&self, cert: &[u8]) -> Result<()> {
-        self.transaction(|| self.db.ca_import_tsig(cert))
+    fn ca_import_tsig(&self, ca_cert_tsigned: &[u8]) -> Result<()> {
+        self.transaction(|| self.db.ca_import_tsig(ca_cert_tsigned))
     }
 
     fn cert_add(
@@ -361,9 +362,23 @@ impl CaStorageWrite for DbCa {
         (pub_cert, fingerprint): (&str, &str),
         emails: &[&str],
         revocation_certs: &[String],
+        ca_cert_tsigned: Option<&[u8]>,
     ) -> Result<models::User> {
-        self.db
-            .user_add(name, (pub_cert, fingerprint), emails, revocation_certs)
+        self.transaction(|| {
+            if self.db.cert_by_fp(fingerprint)?.is_some() {
+                // Make sure the fingerprint doesn't exist (as part of the transaction)
+                return Err(anyhow::anyhow!(
+                    "A cert with this fingerprint already exists"
+                ));
+            }
+
+            if let Some(ca_cert_tsigned) = ca_cert_tsigned {
+                self.ca_import_tsig(ca_cert_tsigned)?;
+            }
+
+            self.db
+                .user_add(name, (pub_cert, fingerprint), emails, revocation_certs)
+        })
     }
 
     /// Store a new revocation in the database.

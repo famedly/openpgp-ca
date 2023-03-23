@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2022 Heiko Schaefer <heiko@schaefer.name>
+// SPDX-FileCopyrightText: 2019-2023 Heiko Schaefer <heiko@schaefer.name>
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This file is part of OpenPGP CA
@@ -29,10 +29,12 @@ pub fn user_new(
     let (user_key, user_revoc, pass) =
         pgp::make_user_cert(emails, name, password).context("make_user_cert failed")?;
 
+    // -- CA secret operation --
     // CA certifies user cert
-    let user_certified = sign_cert_emails(oca, &user_key, Some(emails), duration_days)
+    let user_certified = certify_emails(oca, &user_key, Some(emails), duration_days)
         .context("sign_user_emails failed")?;
 
+    // -- User key secret operation --
     // User tsigns CA cert
     let ca_cert = oca.ca_get_cert_pub()?;
     let tsigned_ca =
@@ -44,21 +46,18 @@ pub fn user_new(
     let user_cert = pgp::cert_to_armored(&user_certified)?;
     let user_revoc = pgp::revoc_to_armored(&user_revoc, None)?;
 
-    {
-        // FIXME: move DB actions into storage layer, bind together as a transaction
+    // -- CA storage operation --
+    oca.storage
+        .user_add(
+            name,
+            (&user_cert, &user_key.fingerprint().to_hex()),
+            emails,
+            &[user_revoc],
+            Some(tsigned_ca.as_bytes()), // Store tsig for the CA cert
+        )
+        .context("Failed to insert new user into DB")?;
 
-        // Store tsig for the CA cert
-        oca.storage.ca_import_tsig(tsigned_ca.as_bytes())?;
-
-        oca.storage
-            .user_add(
-                name,
-                (&user_cert, &user_key.fingerprint().to_hex()),
-                emails,
-                &[user_revoc],
-            )
-            .context("Failed to insert new user into DB")?;
-    }
+    // -- Communicate result to user --
 
     // the private key needs to be handed over to the user -> print it
     let private = pgp::cert_to_armored_private_key(&user_certified)?;
@@ -93,11 +92,9 @@ pub fn cert_import_new(
     user_cert: &[u8],
     revoc_certs: &[&[u8]],
     name: Option<&str>,
-    emails: &[&str],
+    cert_emails: &[&str],
     duration_days: Option<u64>,
 ) -> Result<()> {
-    // FIXME
-
     let user_cert =
         pgp::to_cert(user_cert).context("cert_import_new: Couldn't process user cert.")?;
 
@@ -115,7 +112,7 @@ pub fn cert_import_new(
     }
 
     // Sign user cert with CA key (only the User IDs that have been specified)
-    let certified = sign_cert_emails(oca, &user_cert, Some(emails), duration_days)
+    let certified = certify_emails(oca, &user_cert, Some(cert_emails), duration_days)
         .context("sign_cert_emails() failed")?;
 
     // Determine "name" for this user in the CA database
@@ -150,8 +147,15 @@ pub fn cert_import_new(
         .map(|s| pgp::revoc_to_armored(s, None))
         .collect();
 
+    // -- CA storage operation --
     oca.storage
-        .user_add(name.as_deref(), (&pub_cert, &fp), emails, &rev_armored?)
+        .user_add(
+            name.as_deref(),
+            (&pub_cert, &fp),
+            cert_emails,
+            &rev_armored?,
+            None,
+        )
         .context("Couldn't insert user")?;
 
     Ok(())
@@ -371,7 +375,7 @@ pub fn cert_check_tsig_on_ca(oca: &Oca, cert: &models::Cert) -> Result<bool> {
 ///
 /// 'emails_filter' (if not None) specifies the subset of User IDs to
 /// certify.
-fn sign_cert_emails(
+fn certify_emails(
     oca: &Oca,
     cert: &Cert,
     emails_filter: Option<&[&str]>,
