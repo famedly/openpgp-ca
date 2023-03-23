@@ -14,6 +14,7 @@ use sequoia_openpgp::Cert;
 
 use crate::db::models;
 use crate::pgp;
+use crate::secret::CaSec;
 use crate::types::CertificationStatus;
 use crate::Oca;
 
@@ -31,7 +32,7 @@ pub fn user_new(
 
     // -- CA secret operation --
     // CA certifies user cert
-    let user_certified = certify_emails(oca, &user_key, Some(emails), duration_days)
+    let user_certified = certify_emails(oca.secret(), &user_key, Some(emails), duration_days)
         .context("sign_user_emails failed")?;
 
     // -- User key secret operation --
@@ -112,7 +113,7 @@ pub fn cert_import_new(
     }
 
     // Sign user cert with CA key (only the User IDs that have been specified)
-    let certified = certify_emails(oca, &user_cert, Some(cert_emails), duration_days)
+    let certified = certify_emails(oca.secret(), &user_cert, Some(cert_emails), duration_days)
         .context("sign_cert_emails() failed")?;
 
     // Determine "name" for this user in the CA database
@@ -376,12 +377,12 @@ pub fn cert_check_tsig_on_ca(oca: &Oca, cert: &models::Cert) -> Result<bool> {
 /// 'emails_filter' (if not None) specifies the subset of User IDs to
 /// certify.
 fn certify_emails(
-    oca: &Oca,
+    ca_sec: &dyn CaSec,
     cert: &Cert,
     emails_filter: Option<&[&str]>,
     duration_days: Option<u64>,
 ) -> Result<Cert> {
-    let fp_ca = oca.ca_get_cert_pub()?.fingerprint();
+    let fp_ca = ca_sec.cert()?.fingerprint();
 
     let mut uids = Vec::new();
 
@@ -442,6 +443,6 @@ fn certify_emails(
         );
     }
 
-    let sigs = oca.secret().sign_user_ids(cert, &uids, duration_days)?;
+    let sigs = ca_sec.sign_user_ids(cert, &uids, duration_days)?;
     cert.clone().insert_packets(sigs)
 }

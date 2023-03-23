@@ -138,6 +138,10 @@ impl QueueDb {
     pub(crate) fn queue_insert(&self, q: NewQueue) -> Result<()> {
         self.db.queue_insert(q)
     }
+
+    pub(crate) fn cert(&self) -> Result<Cert> {
+        ca_get_cert_pub(&self.db)
+    }
 }
 
 pub(crate) trait CaStorage {

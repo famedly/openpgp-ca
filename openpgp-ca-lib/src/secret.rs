@@ -22,6 +22,7 @@ use crate::pgp;
 
 /// Abstraction of operations that need private key material
 pub(crate) trait CaSec {
+    fn cert(&self) -> Result<Cert>;
     fn sign_user_ids(
         &self,
         cert: &Cert,
@@ -78,6 +79,10 @@ impl<T: CertificationBackend> CaSecCB<T> {
 }
 
 impl<T: CertificationBackend> CaSec for CaSecCB<T> {
+    fn cert(&self) -> Result<Cert> {
+        Ok(self.ca_cert.clone())
+    }
+
     /// CA certifies a specified list of User IDs of a cert.
     ///
     /// This fn does not perform any checks as a precondition for adding new

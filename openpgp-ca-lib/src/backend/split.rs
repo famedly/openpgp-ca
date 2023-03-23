@@ -127,6 +127,10 @@ impl SplitCa {
 }
 
 impl CaSec for SplitCa {
+    fn cert(&self) -> Result<Cert> {
+        self.db.cert()
+    }
+
     /// Returns an empty vec -> the certifications are created asynchronously.
     fn sign_user_ids(
         &self,
