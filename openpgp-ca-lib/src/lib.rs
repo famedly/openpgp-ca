@@ -864,16 +864,7 @@ impl Oca {
     /// serve the latest version of a cert to third parties, so they can learn
     /// about e.g. revocations on the cert)
     pub fn cert_delist(&self, fp: &str) -> Result<()> {
-        // FIXME: move DB actions into storage layer, bind together as a transaction
-
-        let cert = self.cert_get_by_fingerprint(fp)?;
-
-        if let Some(mut cert) = cert {
-            cert.delisted = true;
-            self.storage.cert_update(&cert)
-        } else {
-            Err(anyhow::anyhow!("Cert not found"))
-        }
+        self.storage.cert_delist(fp)
     }
 
     /// Mark a certificate as "deactivated".
@@ -883,16 +874,7 @@ impl Oca {
     /// This approach is probably appropriate in most cases to phase out a
     /// certificate.
     pub fn cert_deactivate(&self, fp: &str) -> Result<()> {
-        // FIXME: move DB actions into storage layer, bind together as a transaction
-
-        let cert = self.cert_get_by_fingerprint(fp)?;
-
-        if let Some(mut cert) = cert {
-            cert.inactive = true;
-            self.storage.cert_update(&cert)
-        } else {
-            Err(anyhow::anyhow!("Cert not found"))
-        }
+        self.storage.cert_deactivate(fp)
     }
 
     /// Get Cert by fingerprint.

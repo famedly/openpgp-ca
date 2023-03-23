@@ -189,6 +189,9 @@ pub(crate) trait CaStorageWrite {
 
     fn cert_update(&self, cert: &[u8]) -> Result<()>;
 
+    fn cert_delist(&self, fp: &str) -> Result<()>;
+    fn cert_deactivate(&self, fp: &str) -> Result<()>;
+
     fn user_add(
         &self,
         name: Option<&str>,
@@ -378,6 +381,36 @@ impl CaStorageWrite for DbCa {
                 Err(anyhow::anyhow!(
                     "No cert with this fingerprint found in DB, cannot update"
                 ))
+            }
+        })
+    }
+
+    fn cert_delist(&self, fp: &str) -> Result<()> {
+        let fp = pgp::normalize_fp(fp)?;
+
+        self.transaction(|| {
+            let cert = self.cert_by_fp(&fp)?;
+
+            if let Some(mut cert) = cert {
+                cert.delisted = true;
+                self.db.cert_update(&cert)
+            } else {
+                Err(anyhow::anyhow!("Cert not found"))
+            }
+        })
+    }
+
+    fn cert_deactivate(&self, fp: &str) -> Result<()> {
+        let fp = pgp::normalize_fp(fp)?;
+
+        self.transaction(|| {
+            let cert = self.cert_by_fp(&fp)?;
+
+            if let Some(mut cert) = cert {
+                cert.inactive = true;
+                self.db.cert_update(&cert)
+            } else {
+                Err(anyhow::anyhow!("Cert not found"))
             }
         })
     }
