@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime};
 use anyhow::{Context, Result};
 use sequoia_openpgp::cert::amalgamation::ValidateAmalgamation;
 use sequoia_openpgp::packet::{Signature, UserID};
+use sequoia_openpgp::serialize::SerializeInto;
 use sequoia_openpgp::Cert;
 
 use crate::db::models;
@@ -163,30 +164,7 @@ pub fn cert_import_new(
 }
 
 pub fn cert_import_update(oca: &Oca, cert: &[u8]) -> Result<()> {
-    // FIXME: move DB actions into storage layer, bind together as a transaction
-
-    let cert_new = pgp::to_cert(cert).context("cert_import_update: couldn't process cert")?;
-
-    let fp = cert_new.fingerprint().to_hex();
-
-    if let Some(mut db_cert) = oca
-        .storage
-        .cert_by_fp(&fp)
-        .context("cert_import_update(): get_cert() check by fingerprint failed")?
-    {
-        // merge existing and new public key
-        let cert_old = pgp::to_cert(db_cert.pub_cert.as_bytes())?;
-
-        let updated = cert_old.merge_public(cert_new)?;
-        let armored = pgp::cert_to_armored(&updated)?;
-
-        db_cert.pub_cert = armored;
-        oca.storage.cert_update(&db_cert)
-    } else {
-        Err(anyhow::anyhow!(
-            "No cert with this fingerprint found in DB, cannot update"
-        ))
-    }
+    oca.storage.cert_update(cert)
 }
 
 /// Certify the User IDs in `certify` in the Cert `c` (with validity of `validity_days`).
@@ -195,7 +173,6 @@ fn add_certifications(
     oca: &Oca,
     certify: Vec<&UserID>,
     c: &Cert,
-    db_cert: models::Cert,
     validity_days: u64,
 ) -> Result<()> {
     if !certify.is_empty() {
@@ -206,10 +183,9 @@ fn add_certifications(
 
         let certified = c.clone().insert_packets(sigs)?;
 
-        // update cert in db
-        let mut cert_update = db_cert;
-        cert_update.pub_cert = pgp::cert_to_armored(&certified)?;
-        oca.storage.cert_update(&cert_update)?;
+        // Merge cert updates into db
+        // (a Cert merge operation is performed in a DB transaction)
+        oca.storage.cert_update(&certified.to_vec()?)?;
     }
 
     Ok(())
@@ -220,8 +196,6 @@ pub fn certs_refresh_ca_certifications(
     threshold_days: u64,
     validity_days: u64,
 ) -> Result<()> {
-    // FIXME: move DB actions into storage layer, bind together as a transaction
-
     // FIXME: fail/report individual certification problems?
 
     let threshold_time =
@@ -264,17 +238,13 @@ pub fn certs_refresh_ca_certifications(
             }
         }
 
-        add_certifications(oca, re_certify, &c, db_cert, validity_days)?;
+        add_certifications(oca, re_certify, &c, validity_days)?;
     }
 
     Ok(())
 }
 
 pub fn certs_re_certify(oca: &Oca, cert_old: Cert, validity_days: u64) -> Result<()> {
-    // FIXME: de-deduplicate code with certs_refresh_ca_certifications()?
-
-    // FIXME: move DB actions into storage layer, bind together as a transaction
-
     // FIXME: fail/report individual certification problems?
 
     for db_cert in oca
@@ -304,7 +274,7 @@ pub fn certs_re_certify(oca: &Oca, cert_old: Cert, validity_days: u64) -> Result
             }
         }
 
-        add_certifications(oca, re_certify, &c, db_cert, validity_days)?;
+        add_certifications(oca, re_certify, &c, validity_days)?;
     }
 
     Ok(())

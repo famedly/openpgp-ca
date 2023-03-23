@@ -186,7 +186,8 @@ pub(crate) trait CaStorageWrite {
         fingerprint: &str,
         user_id: Option<i32>,
     ) -> Result<models::Cert>;
-    fn cert_update(&self, cert: &models::Cert) -> Result<()>;
+
+    fn cert_update(&self, cert: &[u8]) -> Result<()>;
 
     fn user_add(
         &self,
@@ -356,8 +357,29 @@ impl CaStorageWrite for DbCa {
         self.db.cert_add(pub_cert, fingerprint, user_id)
     }
 
-    fn cert_update(&self, cert: &models::Cert) -> Result<()> {
-        self.db.cert_update(cert)
+    fn cert_update(&self, cert: &[u8]) -> Result<()> {
+        let cert_new = pgp::to_cert(cert).context("cert_update: couldn't process cert")?;
+        let fp = cert_new.fingerprint().to_hex();
+
+        self.transaction(|| {
+            if let Some(mut db_cert) = self
+                .db
+                .cert_by_fp(&fp)
+                .context("cert_import_update(): get_cert() check by fingerprint failed")?
+            {
+                // merge existing and new public key
+                let cert_old = pgp::to_cert(db_cert.pub_cert.as_bytes())?;
+
+                let updated = cert_old.merge_public(cert_new)?;
+                db_cert.pub_cert = pgp::cert_to_armored(&updated)?;
+
+                self.db.cert_update(&db_cert)
+            } else {
+                Err(anyhow::anyhow!(
+                    "No cert with this fingerprint found in DB, cannot update"
+                ))
+            }
+        })
     }
 
     fn user_add(

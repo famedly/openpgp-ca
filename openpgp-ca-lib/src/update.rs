@@ -9,6 +9,7 @@
 use anyhow::Result;
 use sequoia_net::wkd;
 use sequoia_net::Policy;
+use sequoia_openpgp::serialize::SerializeInto;
 use sequoia_openpgp::{Fingerprint, KeyID};
 use tokio::runtime::Runtime;
 
@@ -48,13 +49,9 @@ pub fn update_from_wkd(oca: &Oca, cert: &models::Cert) -> Result<bool> {
         }
     }
 
-    // FIXME: use "update/merge" storage primitive?
-
     if merged != orig {
-        let mut db_update = cert.clone();
-        db_update.pub_cert = pgp::cert_to_armored(&merged)?;
-
-        oca.storage.cert_update(&db_update)?;
+        // merge updates into DB
+        oca.storage.cert_update(&merged.to_vec()?)?;
 
         Ok(true)
     } else {
@@ -77,17 +74,12 @@ pub fn update_from_hagrid(oca: &Oca, cert: &models::Cert) -> Result<bool> {
     let rt = Runtime::new()?;
     let update = rt.block_on(async move { hagrid.get(&KeyID::from(fp)).await })?;
 
-    // FIXME: use "update/merge" storage primitive?
-
     // Merge new certificate information into existing cert.
     // (Silently ignore potential errors from merge_public())
     if let Ok(merged) = c.clone().merge_public(update) {
         if merged != c {
-            // Store merged cert in DB
-            let mut db_update = cert.clone();
-            db_update.pub_cert = pgp::cert_to_armored(&merged)?;
-
-            oca.storage.cert_update(&db_update)?;
+            // merge updates into DB
+            oca.storage.cert_update(&merged.to_vec()?)?;
 
             // An update for this cert was received
             return Ok(true);

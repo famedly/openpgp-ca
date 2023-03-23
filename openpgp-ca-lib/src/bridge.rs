@@ -5,6 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use sequoia_openpgp::parse::Parse;
+use sequoia_openpgp::serialize::SerializeInto;
 use sequoia_openpgp::{Cert, Fingerprint};
 
 use crate::db::models;
@@ -108,7 +109,7 @@ pub fn bridge_revoke(oca: &Oca, email: &str) -> Result<()> {
     // FIXME: db operations should be bracketed in a transaction
 
     if let Some(bridge) = oca.storage.bridge_by_email(email)? {
-        if let Some(mut db_cert) = oca.storage.cert_by_id(bridge.cert_id)? {
+        if let Some(db_cert) = oca.storage.cert_by_id(bridge.cert_id)? {
             let bridge_cert = pgp::to_cert(db_cert.pub_cert.as_bytes())?;
 
             // Generate revocation for the bridge
@@ -122,11 +123,8 @@ pub fn bridge_revoke(oca: &Oca, email: &str) -> Result<()> {
                 pgp::revoc_to_armored(&revocation, None)?
             );
 
-            // FIXME: use "update/merge" storage primitive?
-
-            // Save updated cert (including the revocation) to DB
-            db_cert.pub_cert = pgp::cert_to_armored(&revoked)?;
-            oca.storage.cert_update(&db_cert)
+            // Merge the revoked bridge Cert into DB
+            oca.storage.cert_update(&revoked.to_vec()?)
         } else {
             Err(anyhow::anyhow!("No cert found for bridge"))
         }

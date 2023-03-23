@@ -74,7 +74,7 @@ use openpgp_card_sequoia::state::Transaction;
 use openpgp_card_sequoia::{state::Open, Card};
 use sequoia_openpgp::packet::Signature;
 use sequoia_openpgp::parse::Parse;
-use sequoia_openpgp::serialize::Marshal;
+use sequoia_openpgp::serialize::{Marshal, SerializeInto};
 use sequoia_openpgp::Cert;
 
 use crate::backend::card::{check_card_empty, CardBackend};
@@ -731,13 +731,11 @@ impl Oca {
 
             let sig = Signature::from_bytes(&bytes)?;
 
-            if let Some(mut cert) = self.storage.cert_by_fp(fp)? {
+            if let Some(cert) = self.storage.cert_by_fp(fp)? {
                 let c = Cert::from_str(&cert.pub_cert)?;
                 let certified = c.insert_packets(sig)?;
 
-                cert.pub_cert = pgp::cert_to_armored(&certified)?;
-
-                self.storage.cert_update(&cert)?;
+                self.storage.cert_update(&certified.to_vec()?)?;
 
                 // FIXME: mark queue entry as done
             } else {
