@@ -348,11 +348,7 @@ impl Uninit {
     ) -> Result<Oca> {
         Self::check_domainname(domainname)?;
 
-        // Open a separate scope for database-access.
-        //
-        // Without this block, init_from_db_state() [below] gets stuck while trying to clone
-        // the internal Rc<OcaDb> (FIXME: understand why this happens?!)
-        {
+        self.storage.transaction(|| {
             // The CA database must be uninitialized!
             if self.storage.is_ca_initialized()? {
                 return Err(anyhow::anyhow!("CA database is already initialized"));
@@ -360,17 +356,15 @@ impl Uninit {
 
             let pubkey = card::check_if_card_matches(card_ident, ca_cert)?;
 
-            self.storage.transaction(|| {
-                CardBackend::ca_init(
-                    &self.storage,
-                    domainname,
-                    card_ident,
-                    pin,
-                    &pubkey,
-                    &ca_cert.fingerprint().to_hex(),
-                )
-            })?;
-        }
+            CardBackend::ca_init(
+                &self.storage,
+                domainname,
+                card_ident,
+                pin,
+                &pubkey,
+                &ca_cert.fingerprint().to_hex(),
+            )
+        })?;
 
         self.init_from_db_state()
     }
