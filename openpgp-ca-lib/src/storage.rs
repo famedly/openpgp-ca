@@ -61,12 +61,12 @@ impl UninitDb {
 
     pub(crate) fn ca_insert(
         &self,
-        ca: models::NewCa,
+        domainname: &str,
         ca_key: &str,
         fingerprint: &str,
         backend: Option<&str>,
     ) -> Result<()> {
-        self.db.ca_insert(ca, ca_key, fingerprint, backend)
+        self.db.ca_insert(domainname, ca_key, fingerprint, backend)
     }
 
     pub(crate) fn cacert_update(&self, cacert: &models::Cacert) -> Result<()> {
@@ -98,13 +98,9 @@ impl UninitDb {
         }
 
         let ca_key = pgp::cert_to_armored_private_key(cert)?;
+        let fp = cert.fingerprint().to_hex();
 
-        self.db.ca_insert(
-            models::NewCa { domainname },
-            &ca_key,
-            &cert.fingerprint().to_hex(),
-            None,
-        )
+        self.db.ca_insert(domainname, &ca_key, &fp, None)
     }
 
     /// Initialize OpenPGP CA instance for split mode.
@@ -115,13 +111,10 @@ impl UninitDb {
         }
 
         let ca = pgp::cert_to_armored(cert)?;
+        let fp = cert.fingerprint().to_hex();
+        let backend = Backend::SplitFront.to_config();
 
-        self.db.ca_insert(
-            models::NewCa { domainname },
-            &ca,
-            &cert.fingerprint().to_hex(),
-            Backend::SplitFront.to_config().as_deref(),
-        )
+        self.db.ca_insert(domainname, &ca, &fp, backend.as_deref())
     }
 }
 

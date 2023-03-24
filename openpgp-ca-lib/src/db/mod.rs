@@ -244,11 +244,13 @@ impl OcaDb {
 
     pub(crate) fn ca_insert(
         &self,
-        ca: NewCa,
+        domainname: &str,
         ca_key: &str,
         fingerprint: &str,
         backend: Option<&str>,
     ) -> Result<()> {
+        let ca = NewCa { domainname };
+
         diesel::insert_into(cas::table)
             .values(&ca)
             .execute(&self.conn)

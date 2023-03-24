@@ -25,7 +25,6 @@ use sequoia_openpgp::{Cert, Packet};
 
 use crate::backend;
 use crate::backend::{Backend, CertificationBackend};
-use crate::db::models;
 use crate::pgp;
 use crate::storage::UninitDb;
 
@@ -126,7 +125,7 @@ impl CardBackend {
         });
 
         db.ca_insert(
-            models::NewCa { domainname },
+            domainname,
             pubkey,
             fingerprint,
             backend.to_config().as_deref(),
