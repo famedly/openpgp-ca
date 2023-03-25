@@ -70,7 +70,6 @@ use chrono::offset::Utc;
 use chrono::DateTime;
 use openpgp_card::algorithm::AlgoSimple;
 use openpgp_card_pcsc::PcscBackend;
-use openpgp_card_sequoia::state::Transaction;
 use openpgp_card_sequoia::{state::Open, Card};
 use sequoia_openpgp::packet::Signature;
 use sequoia_openpgp::parse::Parse;
@@ -113,67 +112,12 @@ pub fn matching_cards(ca_cert: &[u8]) -> Result<Vec<String>> {
         let mut card: Card<Open> = backend.into();
         let mut transaction = card.transaction()?;
 
-        if card_matches(&mut transaction, &ca_cert).is_ok() {
+        if card::card_matches(&mut transaction, &ca_cert).is_ok() {
             idents.push(transaction.application_identifier()?.ident());
         }
     }
 
     Ok(idents)
-}
-
-/// Does 'ca_cert' match the data on the opened card?
-///
-/// FIXME: also check the state of SIG and DEC slots?
-fn card_matches(transaction: &mut Card<Transaction>, ca_cert: &Cert) -> Result<String> {
-    let fps = transaction.fingerprints()?;
-    let auth = fps
-        .authentication()
-        .context("No AUT key on card".to_string())?;
-
-    let auth_fp = auth.to_string();
-
-    let cardholder_name = transaction.cardholder_name()?;
-
-    // Check that cardholder name is set to "OpenPGP CA".
-    if cardholder_name.as_deref() != Some("OpenPGP CA") {
-        return Err(anyhow::anyhow!(
-            "Expected cardholder name 'OpenPGP CA' on OpenPGP card, found '{}'.",
-            cardholder_name.unwrap_or_default()
-        ));
-    }
-
-    // Make sure that the CA public key contains a User ID!
-    // (So we can set the 'Signer's UserID' packet for easy WKD lookup of the CA cert)
-    if ca_cert.userids().next().is_none() {
-        return Err(anyhow::anyhow!(
-            "Expect CA certificate to contain at least one User ID, but found none."
-        ));
-    }
-
-    let pubkey =
-        pgp::cert_to_armored(ca_cert).context("Failed to transform CA cert to armored pubkey")?;
-
-    // CA pubkey and card auth key slot must match
-    if ca_cert.fingerprint().to_hex() != auth_fp {
-        return Err(anyhow::anyhow!(format!(
-            "Auth key slot on card {} doesn't match primary (cert) fingerprint {}.",
-            auth_fp,
-            ca_cert.fingerprint().to_hex()
-        )));
-    }
-
-    Ok(pubkey)
-}
-
-// Check the card `card_ident`, confirm that the cardholder name is set to
-// "OpenPGP CA", and that the AUT slot contains the certification key.
-fn check_if_card_matches(card_ident: &str, ca_cert: &Cert) -> Result<String> {
-    // Open Smart Card
-    let backend = PcscBackend::open_by_ident(card_ident, None)?;
-    let mut card: Card<Open> = backend.into();
-    let mut transaction = card.transaction()?;
-
-    card_matches(&mut transaction, ca_cert).context(format!("On card {card_ident}"))
 }
 
 /// A CA instance that has a database, which is (possibly) not initialized yet.
@@ -414,7 +358,7 @@ impl Uninit {
                 return Err(anyhow::anyhow!("CA database is already initialized"));
             }
 
-            let pubkey = check_if_card_matches(card_ident, ca_cert)?;
+            let pubkey = card::check_if_card_matches(card_ident, ca_cert)?;
 
             self.storage.transaction(|| {
                 CardBackend::ca_init(
@@ -516,7 +460,7 @@ impl Oca {
 
                 // Check if the card exists and contains the correct CA key
                 let ca_cert = self.ca_get_cert_pub()?;
-                let _pubkey = check_if_card_matches(card_ident, &ca_cert)?;
+                let _pubkey = card::check_if_card_matches(card_ident, &ca_cert)?;
 
                 // Update backend configuration in database
                 let ca_pub = pgp::cert_to_armored(&ca_cert)?;

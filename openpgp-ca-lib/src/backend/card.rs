@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use openpgp_card::{algorithm::AlgoSimple, KeyType};
 use openpgp_card_pcsc::PcscBackend;
 use openpgp_card_sequoia::state::{Admin, Open, Transaction};
@@ -27,6 +27,61 @@ use crate::backend;
 use crate::backend::{Backend, CertificationBackend};
 use crate::pgp;
 use crate::storage::UninitDb;
+
+/// Does 'ca_cert' match the data on the opened card?
+///
+/// FIXME: also check the state of SIG and DEC slots?
+pub(crate) fn card_matches(transaction: &mut Card<Transaction>, ca_cert: &Cert) -> Result<String> {
+    let fps = transaction.fingerprints()?;
+    let auth = fps
+        .authentication()
+        .context("No AUT key on card".to_string())?;
+
+    let auth_fp = auth.to_string();
+
+    let cardholder_name = transaction.cardholder_name()?;
+
+    // Check that cardholder name is set to "OpenPGP CA".
+    if cardholder_name.as_deref() != Some("OpenPGP CA") {
+        return Err(anyhow::anyhow!(
+            "Expected cardholder name 'OpenPGP CA' on OpenPGP card, found '{}'.",
+            cardholder_name.unwrap_or_default()
+        ));
+    }
+
+    // Make sure that the CA public key contains a User ID!
+    // (So we can set the 'Signer's UserID' packet for easy WKD lookup of the CA cert)
+    if ca_cert.userids().next().is_none() {
+        return Err(anyhow::anyhow!(
+            "Expect CA certificate to contain at least one User ID, but found none."
+        ));
+    }
+
+    let pubkey =
+        pgp::cert_to_armored(ca_cert).context("Failed to transform CA cert to armored pubkey")?;
+
+    // CA pubkey and card auth key slot must match
+    if ca_cert.fingerprint().to_hex() != auth_fp {
+        return Err(anyhow::anyhow!(format!(
+            "Auth key slot on card {} doesn't match primary (cert) fingerprint {}.",
+            auth_fp,
+            ca_cert.fingerprint().to_hex()
+        )));
+    }
+
+    Ok(pubkey)
+}
+
+// Check the card `card_ident`, confirm that the cardholder name is set to
+// "OpenPGP CA", and that the AUT slot contains the certification key.
+pub(crate) fn check_if_card_matches(card_ident: &str, ca_cert: &Cert) -> Result<String> {
+    // Open Smart Card
+    let backend = PcscBackend::open_by_ident(card_ident, None)?;
+    let mut card: Card<Open> = backend.into();
+    let mut transaction = card.transaction()?;
+
+    card_matches(&mut transaction, ca_cert).context(format!("On card {card_ident}"))
+}
 
 /// an OpenPGP card backend for a CA instance
 pub(crate) struct CardBackend {
