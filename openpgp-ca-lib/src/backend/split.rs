@@ -6,13 +6,17 @@
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::{BufRead, Read, Write};
 use std::ops::Add;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine};
 use sequoia_openpgp::packet::{Signature, UserID};
+use sequoia_openpgp::parse::Parse;
+use sequoia_openpgp::serialize::{Marshal, SerializeInto};
 use sequoia_openpgp::Cert;
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +24,7 @@ use crate::db::models::{NewQueue, Queue};
 use crate::db::OcaDb;
 use crate::pgp;
 use crate::secret::CaSec;
-use crate::storage::QueueDb;
+use crate::storage::{CaStorageRW, QueueDb};
 
 pub(crate) const CSR_FILE: &str = "csr.txt";
 
@@ -191,4 +195,104 @@ impl CaSec for SplitCa {
             "Operation is not currently supported on a split-mode CA instance. Please perform it on your back CA instance."
         ))
     }
+}
+
+pub(crate) fn process(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> Result<()> {
+    let input = File::open(import)?;
+    let mut a = tar::Archive::new(input);
+
+    let mut csr = String::new();
+    let mut certs = HashMap::new();
+
+    for file in a.entries()? {
+        let mut file = file?;
+
+        let name = file.header().path()?;
+        if name.to_str() == Some(CSR_FILE) {
+            file.read_to_string(&mut csr)?;
+        } else if name.starts_with("certs/") {
+            let mut s = String::new();
+            file.read_to_string(&mut s)?;
+            let c = Cert::from_str(&s)?;
+
+            certs.insert(c.fingerprint().to_string(), c);
+        } else {
+            unimplemented!()
+        }
+    }
+
+    // prepare output file
+    let mut output = File::create(export)?;
+
+    // FIXME: process first line, check if version and CA fp are acceptable
+    for line in csr.lines().skip(1) {
+        // "queue id" "user id number" "fingerprint" "days (0 if unlimited)" "user id"
+        let v: Vec<_> = line.splitn(5, ' ').collect();
+
+        let db_id: usize = usize::from_str(v[0])?;
+        let uid_nr: usize = usize::from_str(v[1])?;
+        let fp = v[2];
+        let days_valid = match u64::from_str(v[3])? {
+            0 => None,
+            d => Some(d),
+        };
+        let uid = v[4];
+
+        // Cert/User ID that should be certified
+        let c = certs.get(fp).expect("missing cert"); // FIXME
+        let uid = c
+            .userids()
+            .find(|u| u.userid().to_string() == uid)
+            .unwrap() // FIXME unwrap
+            .userid();
+
+        // Generate certification
+        let sigs = ca_sec.sign_user_ids(c, &[uid][..], days_valid)?;
+        assert_eq!(sigs.len(), 1); // FIXME
+
+        let mut v: Vec<u8> = vec![];
+        sigs[0].serialize(&mut v)?;
+
+        let encoded: String = general_purpose::STANDARD_NO_PAD.encode(v);
+
+        // Write a line in output file for this Signature
+        writeln!(output, "{db_id} {uid_nr} {fp} {encoded}")?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Result<()> {
+    let file = File::open(file)?;
+    for line in std::io::BufReader::new(file).lines() {
+        let line = line?;
+
+        let split: Vec<_> = line.split(' ').collect();
+        assert_eq!(split.len(), 4);
+
+        let _db_id = usize::from_str(split[0])?;
+        let _uid_nr = usize::from_str(split[1])?;
+
+        let fp = split[2];
+
+        // base64-encoded serialized Signature
+        let sig = split[3];
+        let bytes = general_purpose::STANDARD.decode(sig).unwrap();
+
+        let sig = Signature::from_bytes(&bytes)?;
+
+        if let Some(cert) = storage.cert_by_fp(fp)? {
+            let c = Cert::from_str(&cert.pub_cert)?;
+            let certified = c.insert_packets(sig)?;
+
+            storage.cert_update(&certified.to_vec()?)?;
+
+            // FIXME: mark queue entry as done
+        } else {
+            // FIXME: mark queue entry as failed?
+            return Err(anyhow::anyhow!("failed to load fp {fp}"));
+        }
+    }
+
+    Ok(())
 }
