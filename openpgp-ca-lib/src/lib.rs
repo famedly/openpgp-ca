@@ -405,6 +405,17 @@ impl Uninit {
 
                 Ok(Oca { storage, secret })
             }
+            Backend::SplitBack(_) => self.init_split_back_from_db_state_and_ro(None),
+        }
+    }
+
+    /// Initialize split backend OpenpgpCa object, with an optional additional readonly
+    /// backing database.
+    fn init_split_back_from_db_state_and_ro(self, readonly: Option<&str>) -> Result<Oca> {
+        // check database state of this CA
+        let cacert = self.storage.cacert()?;
+
+        match Backend::from_config(cacert.backend.as_deref())? {
             Backend::SplitBack(inner) => {
                 // FIXME: generalize to "Softkey or Card"
                 assert!(*inner == Backend::Softkey);
@@ -412,14 +423,23 @@ impl Uninit {
                 let ca_cert_pub = self.storage.ca_get_cert_pub()?;
                 let ca_sec = CaSecCB::new(Rc::new(softkey), ca_cert_pub);
 
-                // FIXME: use no storage, or overlay-read only DB for inputs (?)
-                let storage = Box::new(DbCa::new(self.storage.db()));
+                // FIXME: add (overlay-)read-only DB for inputs (?)
+                let db = match readonly {
+                    None => unimplemented!(),
+                    Some(readonly) => {
+                        let ocadb = OcaDb::new(readonly)?;
+                        split::SplitBackDb::new(Rc::new(ocadb))
+                    }
+                };
+
+                let storage = Box::new(db);
 
                 Ok(Oca {
                     storage,
                     secret: Box::new(ca_sec),
                 })
             }
+            _ => unimplemented!(),
         }
     }
 }

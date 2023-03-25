@@ -20,11 +20,11 @@ use sequoia_openpgp::serialize::{Marshal, SerializeInto};
 use sequoia_openpgp::Cert;
 use serde::{Deserialize, Serialize};
 
-use crate::db::models::{NewQueue, Queue};
-use crate::db::OcaDb;
+use crate::db::models::{Bridge, Cacert, NewQueue, Queue, Revocation, User};
+use crate::db::{models, OcaDb};
 use crate::pgp;
 use crate::secret::CaSec;
-use crate::storage::{CaStorageRW, QueueDb};
+use crate::storage::{ca_get_cert_pub, CaStorage, CaStorageRW, CaStorageWrite, QueueDb, UninitDb};
 
 pub(crate) const CSR_FILE: &str = "csr.txt";
 
@@ -296,3 +296,210 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
 
     Ok(())
 }
+
+pub(crate) struct SplitBackDb {
+    // read-only from separate oca file
+    readonly: Rc<OcaDb>,
+}
+
+impl SplitBackDb {
+    pub(crate) fn new(readonly: Rc<OcaDb>) -> Self {
+        Self { readonly }
+    }
+}
+
+/// This implementation mimics the DbCa implementation,
+/// using self.readonly as the datasource, if set.
+/// If self.readonly is None, the impl returns Errors.
+impl CaStorage for SplitBackDb {
+    fn ca(&self) -> Result<models::Ca> {
+        let (ca, _) = self.readonly.get_ca()?;
+        Ok(ca)
+    }
+
+    fn cacert(&self) -> Result<models::Cacert> {
+        let (_, cacert) = self.readonly.get_ca()?;
+        Ok(cacert)
+    }
+
+    /// Get the Cert of the CA (without private key material).
+    fn ca_get_cert_pub(&self) -> Result<Cert> {
+        ca_get_cert_pub(&self.readonly)
+    }
+
+    /// Get the User ID of this CA
+    fn ca_userid(&self) -> Result<UserID> {
+        let cert = self.ca_get_cert_pub()?;
+        let uids: Vec<_> = cert.userids().collect();
+
+        if uids.len() != 1 {
+            return Err(anyhow::anyhow!("ERROR: CA has != 1 user_id"));
+        }
+
+        Ok(uids[0].userid().clone())
+    }
+
+    /// Get the email of this CA
+    fn ca_email(&self) -> Result<String> {
+        let email = self.ca_userid()?.email()?;
+
+        if let Some(email) = email {
+            Ok(email)
+        } else {
+            Err(anyhow::anyhow!("CA user_id has no email"))
+        }
+    }
+
+    fn certs(&self) -> Result<Vec<models::Cert>> {
+        self.readonly.certs()
+    }
+
+    fn cert_by_id(&self, id: i32) -> Result<Option<models::Cert>> {
+        self.readonly.cert_by_id(id)
+    }
+
+    fn cert_by_fp(&self, fingerprint: &str) -> Result<Option<models::Cert>> {
+        self.readonly.cert_by_fp(fingerprint)
+    }
+
+    fn certs_by_email(&self, email: &str) -> Result<Vec<models::Cert>> {
+        self.readonly.certs_by_email(email)
+    }
+
+    fn certs_by_user(&self, user: &models::User) -> Result<Vec<models::Cert>> {
+        self.readonly.certs_by_user(user)
+    }
+
+    fn emails(&self) -> Result<Vec<models::CertEmail>> {
+        self.readonly.emails()
+    }
+
+    fn emails_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::CertEmail>> {
+        self.readonly.emails_by_cert(cert)
+    }
+
+    fn user_by_cert(&self, cert: &models::Cert) -> Result<Option<models::User>> {
+        self.readonly.user_by_cert(cert)
+    }
+
+    fn users_sorted_by_name(&self) -> Result<Vec<models::User>> {
+        self.readonly.users_sorted_by_name()
+    }
+
+    fn revocation_exists(&self, revocation: &[u8]) -> Result<bool> {
+        self.readonly.revocation_exists(revocation)
+    }
+
+    fn revocations_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::Revocation>> {
+        self.readonly.revocations_by_cert(cert)
+    }
+
+    fn revocation_by_hash(&self, hash: &str) -> Result<Option<models::Revocation>> {
+        self.readonly.revocation_by_hash(hash)
+    }
+
+    fn list_bridges(&self) -> Result<Vec<models::Bridge>> {
+        self.readonly.list_bridges()
+    }
+
+    // ------
+
+    fn bridge_by_email(&self, email: &str) -> Result<Option<models::Bridge>> {
+        self.readonly.bridge_by_email(email)
+    }
+
+    fn queue_not_done(&self) -> Result<Vec<models::Queue>> {
+        self.readonly.queue_not_done()
+    }
+}
+
+/// Returns Errors for all fn, because a SplitBackDb should never
+/// be written to
+/// (some fn throw unimplemented, because they should definitely
+/// not be called on this Database implementation and indicate a
+/// wrong use of this struct)
+impl CaStorageWrite for SplitBackDb {
+    fn into_uninit(self: Box<Self>) -> UninitDb {
+        unimplemented!("This should never be used with a SplitBackDb")
+    }
+
+    fn cacert_update(self, _cacert: &Cacert) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn ca_import_tsig(&self, _cert: &[u8]) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn cert_add(
+        &self,
+        _pub_cert: &str,
+        _fingerprint: &str,
+        _user_id: Option<i32>,
+    ) -> Result<crate::db::models::Cert> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn cert_update(&self, _cert: &[u8]) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn cert_delist(&self, _fp: &str) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn cert_deactivate(&self, _fp: &str) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn user_add(
+        &self,
+        _name: Option<&str>,
+        _cert_fp: (&str, &str),
+        _emails: &[&str],
+        _revocation_certs: &[String],
+        _ca_cert_tsigned: Option<&[u8]>,
+    ) -> Result<User> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn revocation_add(&self, _revocation: &[u8]) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn revocation_apply(&self, _db_revoc: Revocation) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+
+    fn bridge_add(
+        &self,
+        _remote_armored: &str,
+        _remote_fp: &str,
+        _remote_email: &str,
+        _scope: &str,
+    ) -> Result<Bridge> {
+        Err(anyhow::anyhow!(
+            "Unsupported operation on Split-mode backend CA"
+        ))
+    }
+}
+
+impl CaStorageRW for SplitBackDb {}
