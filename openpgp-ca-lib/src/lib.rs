@@ -541,13 +541,34 @@ impl Oca {
         self.storage.ca_import_tsig(cert)
     }
 
+    /// Get current CA certificate from storage.
+    /// This representation of the CA cert includes user certifications.
+    ///  
+    /// Get from database storage, if possible - the cert will then contain all certifications
+    /// we know of. However, on split-mode backends, we don't rely on storage, unless we get
+    /// a readonly copy of the online CA. In this case, the CA certificate may lack some or all
+    /// certifications.
     pub fn ca_get_cert_pub(&self) -> Result<Cert> {
-        self.storage.ca_get_cert_pub()
+        match self.backend {
+            // In a split-mode backend instance, we can't rely on having an up-to-date copy
+            // of the CA certificate in storage.
+            Backend::SplitBack(_) => {
+                if let Ok(ca_cert) = self.storage.ca_get_cert_pub() {
+                    // If readonly front database is available, get CA cert from there
+                    Ok(ca_cert)
+                } else {
+                    // If not: get CA cert from secret backend
+                    self.secret.cert()
+                }
+            }
+            _ => self.storage.ca_get_cert_pub(),
+        }
     }
 
-    /// Returns the public key of the CA as an armored String
+    /// Returns the public key of the CA as an armored String (see [Self::ca_get_cert_pub]).
     pub fn ca_get_pubkey_armored(&self) -> Result<String> {
         let cert = self.ca_get_cert_pub()?;
+
         let ca_pub =
             pgp::cert_to_armored(&cert).context("Failed to transform CA key to armored pubkey")?;
 
