@@ -382,7 +382,7 @@ fn main() -> Result<()> {
         },
         cli::Commands::Wkd { cmd } => match cmd {
             cli::WkdCommand::Export { path } => {
-                ca.export_wkd(&ca.get_ca_domain()?, &path)?;
+                ca.export_wkd(ca.domainname(), &path)?;
             }
         },
 

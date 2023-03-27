@@ -543,12 +543,7 @@ pub fn process_certs(
     })?;
 
     // get the domain of this CA
-    let my_domain = ca.get_ca_domain().map_err(|e| {
-        ReturnError::new(
-            ReturnStatus::InternalError,
-            format!("process_certs: Error getting the CA's domain {e:?}"),
-        )
-    })?;
+    let my_domain = ca.domainname();
 
     // iterate over certs and collect results for each cert
     Ok(certs
@@ -556,7 +551,7 @@ pub fn process_certs(
         .enumerate()
         .map(|(n, cert)| {
             let is_signer = Some(n) == signer;
-            process_cert(cert, is_signer, &my_domain, certificate, ca, persist).into()
+            process_cert(cert, is_signer, my_domain, certificate, ca, persist).into()
         })
         .collect())
 }

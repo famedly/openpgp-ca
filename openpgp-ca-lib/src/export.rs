@@ -177,7 +177,7 @@ pub fn export_keylist(
 
     ukl.keys.push(Key {
         fingerprint,
-        name: Some(format!("OpenPGP CA at {}", oca.get_ca_domain()?)),
+        name: Some(format!("OpenPGP CA at {}", oca.domainname())),
         email: Some(oca.get_ca_email()?),
         comment: None,
         keyserver: None,

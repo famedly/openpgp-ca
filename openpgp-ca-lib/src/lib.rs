@@ -480,7 +480,7 @@ impl Oca {
         cau.init_from_db_state()
     }
 
-    pub(crate) fn domainname(&self) -> &str {
+    pub fn domainname(&self) -> &str {
         &self.domainname
     }
 
@@ -577,11 +577,6 @@ impl Oca {
 
     pub fn get_ca_email(&self) -> Result<String> {
         self.storage.ca_email()
-    }
-
-    /// Get the domainname for this CA
-    pub fn get_ca_domain(&self) -> Result<String> {
-        Ok(self.storage.ca()?.domainname)
     }
 
     /// Print information about the Ca to stdout.
