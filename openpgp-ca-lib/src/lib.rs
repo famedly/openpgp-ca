@@ -419,26 +419,22 @@ impl Uninit {
                     domainname,
                 })
             }
-            Backend::SplitBack(_) => self.init_split_back_from_db_state_and_ro(None),
-        }
-    }
-
-    /// Initialize split backend OpenpgpCa object, with an optional additional readonly
-    /// backing database.
-    fn init_split_back_from_db_state_and_ro(self, readonly: Option<&str>) -> Result<Oca> {
-        // check database state of this CA
-        let (ca, cacert) = self.storage.ca_cert()?;
-
-        let domainname = ca.domainname;
-
-        let backend = Backend::from_config(cacert.backend.as_deref())?;
-        match &backend {
             Backend::SplitBack(inner) => {
-                // FIXME: generalize to "Softkey or Card"
-                assert!(**inner == Backend::Softkey);
-                let softkey = SoftkeyBackend::new(self.storage.ca_get_cert_private()?);
-                let ca_cert_pub = self.storage.ca_get_cert_pub()?;
-                let ca_sec = CaSecCB::new(Rc::new(softkey), ca_cert_pub);
+                let secret: Box<dyn CaSec> = match &**inner {
+                    Backend::Softkey => {
+                        let softkey = SoftkeyBackend::new(self.storage.ca_get_cert_private()?);
+                        let ca_cert_pub = self.storage.ca_get_cert_pub()?;
+                        Box::new(CaSecCB::new(Rc::new(softkey), ca_cert_pub))
+                    }
+                    Backend::Card(card) => {
+                        let card_ca = CardBackend::new(&card.ident, &card.user_pin)?;
+
+                        let ca_cert = self.storage.ca_get_cert_pub()?;
+                        Box::new(CaSecCB::new(Rc::new(card_ca), ca_cert))
+                    }
+
+                    _ => return Err(anyhow::anyhow!("Illegal inner backend: {}", inner)),
+                };
 
                 // FIXME: add (overlay-)read-only DB for inputs (?)
                 let db = match readonly {
@@ -459,12 +455,11 @@ impl Uninit {
 
                 Ok(Oca {
                     storage,
-                    secret: Box::new(ca_sec),
+                    secret,
                     backend,
                     domainname,
                 })
             }
-            _ => unimplemented!(),
         }
     }
 }
@@ -535,6 +530,7 @@ impl Oca {
         self.secret.ca_generate_revocations(output)
     }
 
+    /// Ingest/merge in any new tsigs for our CA certificate from 'cert'
     pub fn ca_import_tsig(&self, cert: &[u8]) -> Result<()> {
         self.storage.ca_import_tsig(cert)
     }
@@ -616,12 +612,37 @@ impl Oca {
     }
 
     /// Print private key of the Ca to stdout.
+    ///
+    /// This operation is only supported for Softkey and SplitBack+Softkey instances.
     pub fn ca_print_private(&self) -> Result<()> {
+        match &self.backend {
+            Backend::Softkey => {
+                // OK
+            }
+            Backend::SplitBack(inner) => match **inner {
+                Backend::Softkey => {
+                    // OK
+                }
+                _ => {
+                    // SplitBack instance that is not Softkey-based
+                    return Err(anyhow::anyhow!(
+                        "Operation unsupported for this backend type"
+                    ));
+                }
+            },
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Operation unsupported for this backend type"
+                ))
+            }
+        }
+
         let ca_cert = self
             .storage
             .cacert()
             .context("failed to load CA from database")?;
         println!("{}", ca_cert.priv_cert);
+
         Ok(())
     }
 
