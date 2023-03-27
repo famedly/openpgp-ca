@@ -436,17 +436,18 @@ impl Uninit {
                     _ => return Err(anyhow::anyhow!("Illegal inner backend: {}", inner)),
                 };
 
-                // FIXME: add (overlay-)read-only DB for inputs (?)
-                let db = match readonly {
-                    None => {
-                        println!("no readonly overlay available");
+                let db = match env::var("OPENPGP_CA_FRONT_DB") {
+                    Ok(readonly) => {
+                        println!("Using {readonly} as r/o online datasource");
 
-                        // FIXME
-                        let ocadb = OcaDb::new("/dev/zero")?;
+                        let ocadb = OcaDb::new(&readonly)?;
                         split::SplitBackDb::new(Rc::new(ocadb))
                     }
-                    Some(readonly) => {
-                        let ocadb = OcaDb::new(readonly)?;
+                    Err(_e) => {
+                        println!("info: no readonly overlay available"); // FIXME: remove
+
+                        // FIXME: use "NoDb" - Or different Oca variant with optional RO storage?
+                        let ocadb = OcaDb::new("/dev/zero")?;
                         split::SplitBackDb::new(Rc::new(ocadb))
                     }
                 };
