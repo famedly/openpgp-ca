@@ -67,7 +67,7 @@ use chrono::DateTime;
 use openpgp_card::algorithm::AlgoSimple;
 use openpgp_card_pcsc::PcscBackend;
 use openpgp_card_sequoia::{state::Open, Card};
-use sequoia_openpgp::packet::Signature;
+use sequoia_openpgp::packet::{Signature, UserID};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::Cert;
 
@@ -488,6 +488,12 @@ impl Oca {
         &self.backend
     }
 
+    /// Get the CaSec implementation to run operations that need CA
+    /// private key material.
+    pub(crate) fn secret(&self) -> &dyn CaSec {
+        &*self.secret
+    }
+
     /// Change which card backs an OpenPGP CA instance
     /// (e.g. to switch to a replacement for a broken card).
     pub fn set_card_backend(self, card_ident: &str, user_pin: &str) -> Result<()> {
@@ -523,14 +529,6 @@ impl Oca {
     }
 
     // -------- CA
-
-    /// Get the CaSec implementation to run operations that need CA
-    /// private key material.
-    ///
-    /// Print information about the created CA instance to stdout.
-    pub(crate) fn secret(&self) -> &dyn CaSec {
-        &*self.secret
-    }
 
     /// Generate revocations for the CA key, write to output file.
     pub fn ca_generate_revocations(&self, output: PathBuf) -> Result<()> {
@@ -575,8 +573,27 @@ impl Oca {
         Ok(ca_pub)
     }
 
+    /// Get the User ID of this CA
+    pub(crate) fn get_ca_userid(&self) -> Result<UserID> {
+        let cert = self.ca_get_cert_pub()?;
+        let uids: Vec<_> = cert.userids().collect();
+
+        if uids.len() != 1 {
+            return Err(anyhow::anyhow!("ERROR: CA has != 1 user_id"));
+        }
+
+        Ok(uids[0].userid().clone())
+    }
+
+    /// Get the email of this CA
     pub fn get_ca_email(&self) -> Result<String> {
-        self.storage.ca_email()
+        let email = self.get_ca_userid()?.email()?;
+
+        if let Some(email) = email {
+            Ok(email)
+        } else {
+            Err(anyhow::anyhow!("CA user_id has no email"))
+        }
     }
 
     /// Print information about the Ca to stdout.

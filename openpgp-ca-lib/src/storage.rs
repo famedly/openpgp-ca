@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use anyhow::{Context, Result};
 use diesel::result::Error;
-use sequoia_openpgp::packet::UserID;
 use sequoia_openpgp::{Cert, Packet};
 
 use crate::backend::Backend;
@@ -142,8 +141,6 @@ pub(crate) trait CaStorage {
     fn cacert(&self) -> Result<models::Cacert>;
 
     fn ca_get_cert_pub(&self) -> Result<Cert>;
-    fn ca_userid(&self) -> Result<UserID>;
-    fn ca_email(&self) -> Result<String>;
 
     fn certs(&self) -> Result<Vec<models::Cert>>;
     fn cert_by_id(&self, id: i32) -> Result<Option<models::Cert>>;
@@ -243,29 +240,6 @@ impl CaStorage for DbCa {
     /// Get the Cert of the CA (without private key material).
     fn ca_get_cert_pub(&self) -> Result<Cert> {
         ca_get_cert_pub(&self.db)
-    }
-
-    /// Get the User ID of this CA
-    fn ca_userid(&self) -> Result<UserID> {
-        let cert = self.ca_get_cert_pub()?;
-        let uids: Vec<_> = cert.userids().collect();
-
-        if uids.len() != 1 {
-            return Err(anyhow::anyhow!("ERROR: CA has != 1 user_id"));
-        }
-
-        Ok(uids[0].userid().clone())
-    }
-
-    /// Get the email of this CA
-    fn ca_email(&self) -> Result<String> {
-        let email = self.ca_userid()?.email()?;
-
-        if let Some(email) = email {
-            Ok(email)
-        } else {
-            Err(anyhow::anyhow!("CA user_id has no email"))
-        }
     }
 
     fn certs(&self) -> Result<Vec<models::Cert>> {
