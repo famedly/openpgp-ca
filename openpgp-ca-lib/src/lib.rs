@@ -59,7 +59,6 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::str::FromStr;
 use std::time::SystemTime;
 
 use anyhow::{Context, Result};
@@ -127,6 +126,9 @@ pub struct Uninit {
 pub struct Oca {
     storage: Box<dyn CaStorageRW>,
     secret: Box<dyn CaSec>,
+
+    backend: Backend,
+    domainname: String,
 }
 
 impl Uninit {
@@ -368,9 +370,12 @@ impl Uninit {
     /// Initialize OpenpgpCa object - this assumes a backend has previously been configured.
     fn init_from_db_state(self) -> Result<Oca> {
         // check database state of this CA
-        let cacert = self.storage.cacert()?;
+        let (ca, cacert) = self.storage.ca_cert()?;
 
-        match Backend::from_config(cacert.backend.as_deref())? {
+        let backend = Backend::from_config(cacert.backend.as_deref())?;
+        let domainname = ca.domainname;
+
+        match &backend {
             Backend::Softkey => {
                 let softkey = SoftkeyBackend::new(self.storage.ca_get_cert_private()?);
 
@@ -382,6 +387,8 @@ impl Uninit {
                 Ok(Oca {
                     storage,
                     secret: Box::new(ca_sec),
+                    backend,
+                    domainname,
                 })
             }
             Backend::Card(card) => {
@@ -395,6 +402,8 @@ impl Uninit {
                 Ok(Oca {
                     storage,
                     secret: Box::new(ca_sec),
+                    backend,
+                    domainname,
                 })
             }
             Backend::SplitFront => {
@@ -403,7 +412,12 @@ impl Uninit {
                 let storage = Box::new(DbCa::new(oca_db.clone()));
                 let secret = Box::new(SplitCa::new(oca_db)?);
 
-                Ok(Oca { storage, secret })
+                Ok(Oca {
+                    storage,
+                    secret,
+                    backend,
+                    domainname,
+                })
             }
             Backend::SplitBack(_) => self.init_split_back_from_db_state_and_ro(None),
         }
@@ -413,19 +427,28 @@ impl Uninit {
     /// backing database.
     fn init_split_back_from_db_state_and_ro(self, readonly: Option<&str>) -> Result<Oca> {
         // check database state of this CA
-        let cacert = self.storage.cacert()?;
+        let (ca, cacert) = self.storage.ca_cert()?;
 
-        match Backend::from_config(cacert.backend.as_deref())? {
+        let domainname = ca.domainname;
+
+        let backend = Backend::from_config(cacert.backend.as_deref())?;
+        match &backend {
             Backend::SplitBack(inner) => {
                 // FIXME: generalize to "Softkey or Card"
-                assert!(*inner == Backend::Softkey);
+                assert!(**inner == Backend::Softkey);
                 let softkey = SoftkeyBackend::new(self.storage.ca_get_cert_private()?);
                 let ca_cert_pub = self.storage.ca_get_cert_pub()?;
                 let ca_sec = CaSecCB::new(Rc::new(softkey), ca_cert_pub);
 
                 // FIXME: add (overlay-)read-only DB for inputs (?)
                 let db = match readonly {
-                    None => unimplemented!(),
+                    None => {
+                        println!("no readonly overlay available");
+
+                        // FIXME
+                        let ocadb = OcaDb::new("/dev/zero")?;
+                        split::SplitBackDb::new(Rc::new(ocadb))
+                    }
                     Some(readonly) => {
                         let ocadb = OcaDb::new(readonly)?;
                         split::SplitBackDb::new(Rc::new(ocadb))
@@ -437,6 +460,8 @@ impl Uninit {
                 Ok(Oca {
                     storage,
                     secret: Box::new(ca_sec),
+                    backend,
+                    domainname,
                 })
             }
             _ => unimplemented!(),
@@ -453,6 +478,14 @@ impl Oca {
     pub fn open(db_url: Option<&str>) -> Result<Self> {
         let cau = Uninit::new(db_url)?;
         cau.init_from_db_state()
+    }
+
+    pub(crate) fn domainname(&self) -> &str {
+        &self.domainname
+    }
+
+    pub(crate) fn backend(&self) -> &Backend {
+        &self.backend
     }
 
     /// Change which card backs an OpenPGP CA instance
@@ -534,23 +567,16 @@ impl Oca {
     ///
     /// This shows the domainname, fingerprint and creation time of this OpenPGP CA instance.
     pub fn ca_show(&self) -> Result<()> {
-        let ca_cert = self
-            .storage
-            .cacert()
-            .context("failed to load CA from database")?;
-
-        let domain = self.get_ca_domain()?;
-
-        let cert = Cert::from_str(&ca_cert.priv_cert)?;
+        let cert = self.secret().cert()?;
 
         let created = cert.primary_key().key().creation_time();
         let created: DateTime<Utc> = created.into();
 
-        println!("    CA Domain: {}", domain);
+        println!("    CA Domain: {}", self.domainname());
         println!("  Fingerprint: {}", cert.fingerprint());
         println!("Creation time: {}", created.format("%F %T %Z"));
 
-        let backend = Backend::from_config(ca_cert.backend.as_deref())?;
+        let backend = self.backend();
         println!("   CA Backend: {backend}");
 
         Ok(())

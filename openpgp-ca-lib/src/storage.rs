@@ -54,9 +54,9 @@ impl UninitDb {
         self.db.is_ca_initialized()
     }
 
-    pub(crate) fn cacert(&self) -> Result<models::Cacert> {
-        let (_, cacert) = self.db.get_ca()?;
-        Ok(cacert)
+    pub(crate) fn ca_cert(&self) -> Result<(models::Ca, models::Cacert)> {
+        let (ca, cacert) = self.db.get_ca()?;
+        Ok((ca, cacert))
     }
 
     pub(crate) fn ca_insert(

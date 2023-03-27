@@ -204,7 +204,7 @@ impl CardBackend {
 
         let ca_new = Cert::from_str(pubkey)?;
 
-        let mut cacert = db.cacert()?;
+        let (_, mut cacert) = db.ca_cert()?;
 
         if ca_new.fingerprint().to_string() != cacert.fingerprint {
             return Err(anyhow::anyhow!(
