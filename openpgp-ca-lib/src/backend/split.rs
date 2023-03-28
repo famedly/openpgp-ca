@@ -299,11 +299,11 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
 
 pub(crate) struct SplitBackDb {
     // read-only from separate oca file
-    readonly: Rc<OcaDb>,
+    readonly: Option<Rc<OcaDb>>,
 }
 
 impl SplitBackDb {
-    pub(crate) fn new(readonly: Rc<OcaDb>) -> Self {
+    pub(crate) fn new(readonly: Option<Rc<OcaDb>>) -> Self {
         Self { readonly }
     }
 }
@@ -313,80 +313,188 @@ impl SplitBackDb {
 /// If self.readonly is None, the impl returns Errors.
 impl CaStorage for SplitBackDb {
     fn ca(&self) -> Result<models::Ca> {
-        let (ca, _) = self.readonly.get_ca()?;
-        Ok(ca)
+        if let Some(readonly) = &self.readonly {
+            let (ca, _) = readonly.get_ca()?;
+            Ok(ca)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn cacert(&self) -> Result<models::Cacert> {
-        let (_, cacert) = self.readonly.get_ca()?;
-        Ok(cacert)
+        if let Some(readonly) = &self.readonly {
+            let (_, cacert) = readonly.get_ca()?;
+            Ok(cacert)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     /// Get the Cert of the CA (without private key material).
     fn ca_get_cert_pub(&self) -> Result<Cert> {
-        ca_get_cert_pub(&self.readonly)
+        if let Some(readonly) = &self.readonly {
+            ca_get_cert_pub(readonly)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn certs(&self) -> Result<Vec<models::Cert>> {
-        self.readonly.certs()
+        if let Some(readonly) = &self.readonly {
+            readonly.certs()
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn cert_by_id(&self, id: i32) -> Result<Option<models::Cert>> {
-        self.readonly.cert_by_id(id)
+        if let Some(readonly) = &self.readonly {
+            readonly.cert_by_id(id)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn cert_by_fp(&self, fingerprint: &str) -> Result<Option<models::Cert>> {
-        self.readonly.cert_by_fp(fingerprint)
+        if let Some(readonly) = &self.readonly {
+            readonly.cert_by_fp(fingerprint)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn certs_by_email(&self, email: &str) -> Result<Vec<models::Cert>> {
-        self.readonly.certs_by_email(email)
+        if let Some(readonly) = &self.readonly {
+            readonly.certs_by_email(email)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn certs_by_user(&self, user: &models::User) -> Result<Vec<models::Cert>> {
-        self.readonly.certs_by_user(user)
+        if let Some(readonly) = &self.readonly {
+            readonly.certs_by_user(user)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn emails(&self) -> Result<Vec<models::CertEmail>> {
-        self.readonly.emails()
+        if let Some(readonly) = &self.readonly {
+            readonly.emails()
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn emails_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::CertEmail>> {
-        self.readonly.emails_by_cert(cert)
+        if let Some(readonly) = &self.readonly {
+            readonly.emails_by_cert(cert)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn user_by_cert(&self, cert: &models::Cert) -> Result<Option<models::User>> {
-        self.readonly.user_by_cert(cert)
+        if let Some(readonly) = &self.readonly {
+            readonly.user_by_cert(cert)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn users_sorted_by_name(&self) -> Result<Vec<models::User>> {
-        self.readonly.users_sorted_by_name()
+        if let Some(readonly) = &self.readonly {
+            readonly.users_sorted_by_name()
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn revocation_exists(&self, revocation: &[u8]) -> Result<bool> {
-        self.readonly.revocation_exists(revocation)
+        if let Some(readonly) = &self.readonly {
+            readonly.revocation_exists(revocation)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn revocations_by_cert(&self, cert: &models::Cert) -> Result<Vec<models::Revocation>> {
-        self.readonly.revocations_by_cert(cert)
+        if let Some(readonly) = &self.readonly {
+            readonly.revocations_by_cert(cert)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn revocation_by_hash(&self, hash: &str) -> Result<Option<models::Revocation>> {
-        self.readonly.revocation_by_hash(hash)
+        if let Some(readonly) = &self.readonly {
+            readonly.revocation_by_hash(hash)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn list_bridges(&self) -> Result<Vec<models::Bridge>> {
-        self.readonly.list_bridges()
+        if let Some(readonly) = &self.readonly {
+            readonly.list_bridges()
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     // ------
 
     fn bridge_by_email(&self, email: &str) -> Result<Option<models::Bridge>> {
-        self.readonly.bridge_by_email(email)
+        if let Some(readonly) = &self.readonly {
+            readonly.bridge_by_email(email)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 
     fn queue_not_done(&self) -> Result<Vec<models::Queue>> {
-        self.readonly.queue_not_done()
+        if let Some(readonly) = &self.readonly {
+            readonly.queue_not_done()
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
     }
 }
 

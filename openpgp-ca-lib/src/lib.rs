@@ -441,15 +441,9 @@ impl Uninit {
                         println!("Using {readonly} as r/o online datasource");
 
                         let ocadb = OcaDb::new(&readonly)?;
-                        split::SplitBackDb::new(Rc::new(ocadb))
+                        split::SplitBackDb::new(Some(Rc::new(ocadb)))
                     }
-                    Err(_e) => {
-                        println!("info: no readonly overlay available"); // FIXME: remove
-
-                        // FIXME: use "NoDb" - Or different Oca variant with optional RO storage?
-                        let ocadb = OcaDb::new("/dev/zero")?;
-                        split::SplitBackDb::new(Rc::new(ocadb))
-                    }
+                    Err(_e) => split::SplitBackDb::new(None),
                 };
 
                 let storage = Box::new(db);
