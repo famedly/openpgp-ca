@@ -300,8 +300,21 @@ impl OcaDb {
             backend,
             active: true,
         };
+        self.cacert_insert(&ca_cert)?;
+
+        Ok(())
+    }
+
+    pub(crate) fn cacerts_delete(&self) -> Result<()> {
+        diesel::delete(cacerts::table)
+            .execute(&self.conn)
+            .context("Error while deleting cacerts entries")?;
+        Ok(())
+    }
+
+    pub(crate) fn cacert_insert(&self, ca_cert: &NewCacert) -> Result<()> {
         diesel::insert_into(cacerts::table)
-            .values(&ca_cert)
+            .values(ca_cert)
             .execute(&self.conn)
             .context("Error saving new CA Cert")?;
 
