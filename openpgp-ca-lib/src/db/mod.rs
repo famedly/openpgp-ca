@@ -20,6 +20,7 @@ use crate::pgp;
 
 /// Database access layer
 pub(crate) struct OcaDb {
+    url: String,
     conn: SqliteConnection,
 }
 
@@ -33,7 +34,14 @@ impl OcaDb {
             .execute(&conn)
             .context("Couldn't set 'PRAGMA foreign_keys=1;'")?;
 
-        Ok(OcaDb { conn })
+        Ok(OcaDb {
+            conn,
+            url: db_url.to_string(),
+        })
+    }
+
+    pub(crate) fn url(&self) -> &str {
+        &self.url
     }
 
     pub(crate) fn transaction<T, E, F>(&self, f: F) -> Result<T, E>
