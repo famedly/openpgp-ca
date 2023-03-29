@@ -333,13 +333,19 @@ fn main() -> Result<()> {
                 ca.ca_re_certify(&cert_old, validity_days)?;
             }
 
-            cli::CaCommand::SplitExport { file } => ca.ca_split_export(file)?,
+            cli::CaCommand::Split { cmd } => match cmd {
+                cli::SplitCommand::Into {} => {
+                    unimplemented!()
+                }
 
-            cli::CaCommand::SplitProcess { import, export } => {
-                ca.ca_split_process(import, export)?
-            }
+                cli::SplitCommand::Export { file } => ca.ca_split_export(file)?,
 
-            cli::CaCommand::SplitImport { import: file } => ca.ca_split_import(file)?,
+                cli::SplitCommand::Process { import, export } => {
+                    ca.ca_split_process(import, export)?
+                }
+
+                cli::SplitCommand::Import { import: file } => ca.ca_split_import(file)?,
+            },
         },
         cli::Commands::Bridge { cmd } => match cmd {
             cli::BridgeCommand::New {

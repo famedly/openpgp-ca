@@ -231,41 +231,10 @@ pub enum CaCommand {
         validity_days: u64,
     },
 
-    /// Export certification requests from a split-mode online instance.
-    SplitExport {
-        #[clap(
-            short = 'f',
-            long = "file",
-            help = "File to export the certification requests to"
-        )]
-        file: PathBuf,
-    },
-
-    /// Process certification requests from a split-mode online instance.
-    SplitProcess {
-        #[clap(
-            short = 'i',
-            long = "import",
-            help = "File to import the certification requests from"
-        )]
-        import: PathBuf,
-
-        #[clap(
-            short = 'e',
-            long = "export",
-            help = "File to export the generated certifications to"
-        )]
-        export: PathBuf,
-    },
-
-    /// Import certifications from the split-mode backing instance.
-    SplitImport {
-        #[clap(
-            short = 'i',
-            long = "import",
-            help = "File to import generated certifications from"
-        )]
-        import: PathBuf,
+    /// Split mode commands
+    Split {
+        #[clap(subcommand)]
+        cmd: SplitCommand,
     },
 }
 
@@ -456,4 +425,47 @@ pub enum UpdateCommand {
     Keyserver {},
     /// Update certificates from WKD
     Wkd {},
+}
+
+#[derive(Subcommand)]
+pub enum SplitCommand {
+    /// Break up a CA into two split halves
+    Into {},
+
+    /// Export certification requests from a split-mode online instance.
+    Export {
+        #[clap(
+            short = 'f',
+            long = "file",
+            help = "File to export the certification requests to"
+        )]
+        file: PathBuf,
+    },
+
+    /// Process certification requests from a split-mode online instance.
+    Process {
+        #[clap(
+            short = 'i',
+            long = "import",
+            help = "File to import the certification requests from"
+        )]
+        import: PathBuf,
+
+        #[clap(
+            short = 'e',
+            long = "export",
+            help = "File to export the generated certifications to"
+        )]
+        export: PathBuf,
+    },
+
+    /// Import certifications from the split-mode backing instance.
+    Import {
+        #[clap(
+            short = 'i',
+            long = "import",
+            help = "File to import generated certifications from"
+        )]
+        import: PathBuf,
+    },
 }
