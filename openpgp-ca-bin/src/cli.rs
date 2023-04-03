@@ -429,8 +429,18 @@ pub enum UpdateCommand {
 
 #[derive(Subcommand)]
 pub enum SplitCommand {
-    /// Break up a CA into two split halves
-    Into {},
+    /// Split a CA into a front and a back instance
+    Into {
+        #[clap(
+            short = 'f',
+            long = "front",
+            help = "Filename for the front CA instance"
+        )]
+        front: PathBuf,
+
+        #[clap(short = 'b', long = "back", help = "Filename for the back CA instance")]
+        back: PathBuf,
+    },
 
     /// Export certification requests from a split-mode online instance.
     Export {

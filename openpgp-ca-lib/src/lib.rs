@@ -59,6 +59,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::str::FromStr;
 use std::time::SystemTime;
 
 use anyhow::{Context, Result};
@@ -76,6 +77,7 @@ use crate::backend::softkey::SoftkeyBackend;
 use crate::backend::split::SplitCa;
 use crate::backend::{card, split, Backend};
 use crate::db::models;
+use crate::db::models::NewCacert;
 use crate::db::OcaDb;
 use crate::secret::{CaSec, CaSecCB};
 use crate::storage::{CaStorageRW, DbCa, UninitDb};
@@ -650,6 +652,87 @@ impl Oca {
         let ca_cert_old = pgp::to_cert(ca_cert_old)?;
 
         cert::certs_re_certify(self, ca_cert_old, validity_days)
+    }
+
+    /// Split a CA instance into a pair of "front" and "back" CA instances.
+    ///
+    /// This operation is currently supported for softkey or card-backed CAs.
+    pub fn ca_split_into(self, front: &Path, back: &Path) -> Result<()> {
+        match self.backend {
+            Backend::Softkey | Backend::Card(_) => {
+                let uninit_orig = self.storage.into_uninit();
+                let (orig_ca, orig_cacert) = uninit_orig.ca_cert()?;
+
+                let cert = Cert::from_str(&orig_cacert.priv_cert)?;
+                let pub_ca_cert = pgp::cert_to_armored(&cert)?;
+
+                let fp = cert.fingerprint().to_hex();
+
+                let db = uninit_orig.db();
+                let db_url = db.url();
+
+                // The front instance gets all user/cert data (but no CA private key/card config).
+
+                // - Assert that all references from users to 'ca_id' point to "1"
+                for user in db.users_sorted_by_name()? {
+                    if user.ca_id != 1 {
+                        return Err(anyhow::anyhow!(
+                            "Splitting a multi-CA setup is not currently supported"
+                        ));
+                    }
+                }
+
+                // - Copy the database file to "front" CA file
+                std::fs::copy(db_url, front)?;
+
+                if let Some(url) = front.to_str() {
+                    let front = OcaDb::new(url)?;
+
+                    // - Remove cacerts and add a new one ('ca' entry stays unchanged)
+                    front.cacerts_delete()?;
+
+                    let backend = Backend::SplitFront.to_config();
+
+                    let new_ca_cert = NewCacert {
+                        active: true,
+                        ca_id: orig_ca.id,
+                        priv_cert: pub_ca_cert,
+                        fingerprint: &fp,
+                        backend: backend.as_deref(),
+                    };
+                    front.cacert_insert(&new_ca_cert)?;
+
+                    // - Vacuum (to remove traces of private key material, if any)
+                    front.vacuum()?;
+                } else {
+                    return Err(anyhow::anyhow!("Illegal front filename"));
+                }
+
+                // The back instance is a new, bare database that just gets the CA
+                // softkey (or card config)
+                let orig_back = Backend::from_config(orig_cacert.backend.as_deref())?;
+
+                let backend = Backend::SplitBack(Box::new(orig_back));
+
+                if let Some(url) = back.to_str() {
+                    let back = Uninit::new(Some(url))?;
+
+                    back.storage.ca_insert(
+                        &orig_ca.domainname,
+                        &orig_cacert.priv_cert,
+                        &fp,
+                        backend.to_config().as_deref(),
+                    )?;
+                } else {
+                    return Err(anyhow::anyhow!("Illegal back filename"));
+                }
+
+                Ok(())
+            }
+            _ => Err(anyhow::anyhow!(
+                "Splitting operation not supported for this backend type"
+            )),
+        }
     }
 
     /// Export certification requests for the backing CA in a simple human-readable output format
