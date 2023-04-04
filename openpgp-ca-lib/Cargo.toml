@@ -35,7 +35,6 @@ tokio = { version = "1.13.1" }
 serde = "1"
 serde_json = "1"
 
-tar = "0.4"
 base64 = "0.21"
 
 chbs = "0.1"

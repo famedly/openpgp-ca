@@ -4,20 +4,20 @@
 // This file is part of OpenPGP CA
 // https://gitlab.com/openpgp-ca/openpgp-ca
 
-use std::collections::HashMap;
+use std::collections::LinkedList;
 use std::fs::File;
-use std::io::{BufRead, Read, Write};
-use std::ops::Add;
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
+use chrono::{DateTime, Utc};
 use sequoia_openpgp::packet::{Signature, UserID};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::serialize::{Marshal, SerializeInto};
-use sequoia_openpgp::Cert;
+use sequoia_openpgp::{Cert, Packet, PacketPile};
 use serde::{Deserialize, Serialize};
 
 use crate::db::models::{Bridge, Cacert, NewQueue, Queue, Revocation, User};
@@ -26,7 +26,19 @@ use crate::pgp;
 use crate::secret::CaSec;
 use crate::storage::{ca_get_cert_pub, CaStorage, CaStorageRW, CaStorageWrite, QueueDb, UninitDb};
 
-pub(crate) const CSR_FILE: &str = "csr.txt";
+// Internal version identifier, to be incremented when the JSON request format changes
+// in an incompatible way.
+//
+// NOTE: In most problematic cases, Serde will fail to deserialize before the version is read.
+const SPLIT_OCA_REQUEST_VERSION: u32 = 1;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct SplitOcaRequests {
+    version: u32,
+    ca_fingerprint: String,
+    created: DateTime<Utc>, // informational timestamp
+    queue: LinkedList<(i32, QueueEntry)>,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum QueueEntry {
@@ -67,63 +79,28 @@ impl SplitCa {
         })
     }
 
-    pub(crate) fn export_csr_as_tar(output: PathBuf, queue: Vec<Queue>, ca_fp: &str) -> Result<()> {
-        // ca_fp is stored in the request list as a safeguard against users accidentally signing
-        // with the wrong CA key.
-        let mut csr_file: String = format!("certification request list [v1] for CA {}\n", ca_fp);
+    pub(crate) fn export_csr_queue(output: PathBuf, queue: Vec<Queue>, ca_fp: &str) -> Result<()> {
+        if !queue.is_empty() {
+            let mut qes: LinkedList<(i32, QueueEntry)> = LinkedList::new();
 
-        let mut certs: HashMap<String, Cert> = HashMap::new();
+            for entry in queue {
+                let task = entry.task;
+                let qe: QueueEntry = serde_json::from_str(&task)?;
 
-        for entry in queue {
-            let task = entry.task;
-            let qe: QueueEntry = serde_json::from_str(&task)?;
-
-            match qe {
-                QueueEntry::CertificationReq(cr) => {
-                    let cert = cr.cert()?;
-
-                    let user_ids = cr.user_ids();
-                    let days = cr.days();
-
-                    let fp = cert.fingerprint().to_string();
-
-                    // write a line for each user id certification request:
-                    // "queue id" "user id number" "fingerprint" "days (0 if unlimited)" "user id"
-                    for (i, uid) in user_ids.iter().enumerate() {
-                        let line =
-                            format!("{} {} {} {} {}\n", entry.id, i, fp, days.unwrap_or(0), uid,);
-                        csr_file = csr_file.add(&line);
-                    }
-
-                    // merge Cert into HashMap of certs
-                    let c = certs.get(&fp);
-                    match c {
-                        None => certs.insert(fp, cert),
-                        Some(c) => certs.insert(fp, c.clone().merge_public(cert)?),
-                    };
-                }
+                qes.push_back((entry.id, qe));
             }
-        }
 
-        // Write all files as tar
-        let file = File::create(output).unwrap();
-        let mut a = tar::Builder::new(file);
+            let sor = SplitOcaRequests {
+                version: SPLIT_OCA_REQUEST_VERSION,
+                ca_fingerprint: ca_fp.to_string(),
+                created: Utc::now(),
+                queue: qes,
+            };
 
-        let csr_file = csr_file.as_bytes();
-        let mut header = tar::Header::new_gnu();
-        header.set_size(csr_file.len() as u64);
-        header.set_cksum();
-        a.append_data(&mut header, CSR_FILE, csr_file)?;
-
-        for (fp, c) in certs {
-            let cert = pgp::cert_to_armored(&c)?;
-            let cert = cert.as_bytes();
-
-            let mut header = tar::Header::new_gnu();
-            header.set_size(cert.len() as u64);
-            header.set_cksum();
-
-            a.append_data(&mut header, format!("certs/{fp}"), cert)?;
+            let output = File::create(output)?;
+            serde_json::to_writer_pretty(output, &sor)?;
+        } else {
+            println!("The queue contains no requests for the back instance, didn't export.");
         }
 
         Ok(())
@@ -135,7 +112,7 @@ impl CaSec for SplitCa {
         self.db.cert()
     }
 
-    /// Returns an empty vec -> the certifications are created asynchronously.
+    /// Always returns an empty vec -> the certifications are created asynchronously.
     fn sign_user_ids(
         &self,
         cert: &Cert,
@@ -199,64 +176,54 @@ impl CaSec for SplitCa {
 
 pub(crate) fn process(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> Result<()> {
     let input = File::open(import)?;
-    let mut a = tar::Archive::new(input);
+    let reqs: SplitOcaRequests = serde_json::from_reader(input)?;
 
-    let mut csr = String::new();
-    let mut certs = HashMap::new();
+    if reqs.version != SPLIT_OCA_REQUEST_VERSION {
+        return Err(anyhow::anyhow!(
+            "Unexpected version {} in request file",
+            reqs.version
+        ));
+    }
 
-    for file in a.entries()? {
-        let mut file = file?;
-
-        let name = file.header().path()?;
-        if name.to_str() == Some(CSR_FILE) {
-            file.read_to_string(&mut csr)?;
-        } else if name.starts_with("certs/") {
-            let mut s = String::new();
-            file.read_to_string(&mut s)?;
-            let c = Cert::from_str(&s)?;
-
-            certs.insert(c.fingerprint().to_string(), c);
-        } else {
-            unimplemented!()
-        }
+    if reqs.ca_fingerprint != ca_sec.cert()?.fingerprint().to_hex() {
+        return Err(anyhow::anyhow!(
+            "Unexpected CA fingerprint {} in request file (doesn't match this back CA)",
+            reqs.ca_fingerprint
+        ));
     }
 
     // prepare output file
     let mut output = File::create(export)?;
 
-    // FIXME: process first line, check if version and CA fp are acceptable
-    for line in csr.lines().skip(1) {
-        // "queue id" "user id number" "fingerprint" "days (0 if unlimited)" "user id"
-        let v: Vec<_> = line.splitn(5, ' ').collect();
+    for (db_id, qe) in reqs.queue {
+        match qe {
+            QueueEntry::CertificationReq(cr) => {
+                // Cert/User ID that should be certified
+                let c = cr.cert()?;
+                let days_valid = cr.days();
+                let uids = cr.user_ids();
 
-        let db_id: usize = usize::from_str(v[0])?;
-        let uid_nr: usize = usize::from_str(v[1])?;
-        let fp = v[2];
-        let days_valid = match u64::from_str(v[3])? {
-            0 => None,
-            d => Some(d),
-        };
-        let uid = v[4];
+                let u: Vec<_> = c
+                    .userids()
+                    .filter(|u| uids.contains(&u.userid().to_string()))
+                    .map(|ca| ca.userid())
+                    .collect();
 
-        // Cert/User ID that should be certified
-        let c = certs.get(fp).expect("missing cert"); // FIXME
-        let uid = c
-            .userids()
-            .find(|u| u.userid().to_string() == uid)
-            .unwrap() // FIXME unwrap
-            .userid();
+                // Generate certifications
+                let sigs = ca_sec.sign_user_ids(&c, &u[..], days_valid)?;
 
-        // Generate certification
-        let sigs = ca_sec.sign_user_ids(c, &[uid][..], days_valid)?;
-        assert_eq!(sigs.len(), 1); // FIXME
+                let pp: PacketPile = sigs.into_iter().map(Packet::from).collect();
 
-        let mut v: Vec<u8> = vec![];
-        sigs[0].serialize(&mut v)?;
+                let mut v: Vec<u8> = vec![];
+                pp.serialize(&mut v)?;
 
-        let encoded: String = general_purpose::STANDARD_NO_PAD.encode(v);
+                let base64: String = general_purpose::STANDARD_NO_PAD.encode(v);
 
-        // Write a line in output file for this Signature
-        writeln!(output, "{db_id} {uid_nr} {fp} {encoded}")?;
+                // Write a line in output file for this Signature
+                let fp = c.fingerprint().to_hex(); // FIXME: drop
+                writeln!(output, "{db_id} {fp} {base64}")?;
+            }
+        }
     }
 
     Ok(())
@@ -268,22 +235,21 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
         let line = line?;
 
         let split: Vec<_> = line.split(' ').collect();
-        assert_eq!(split.len(), 4);
+        assert_eq!(split.len(), 3);
 
-        let _db_id = usize::from_str(split[0])?;
-        let _uid_nr = usize::from_str(split[1])?;
+        let db_id = i32::from_str(split[0])?;
 
-        let fp = split[2];
+        let fp = split[1];
 
         // base64-encoded serialized Signature
-        let sig = split[3];
+        let sig = split[2];
         let bytes = general_purpose::STANDARD.decode(sig).unwrap();
 
-        let sig = Signature::from_bytes(&bytes)?;
+        let packets: Vec<_> = PacketPile::from_bytes(&bytes)?.into();
 
         if let Some(cert) = storage.cert_by_fp(fp)? {
             let c = Cert::from_str(&cert.pub_cert)?;
-            let certified = c.insert_packets(sig)?;
+            let certified = c.insert_packets(packets)?;
 
             storage.cert_update(&certified.to_vec()?)?;
 
