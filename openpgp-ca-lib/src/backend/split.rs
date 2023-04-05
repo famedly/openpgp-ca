@@ -48,6 +48,7 @@ pub(crate) struct SplitOcaRequests {
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum QueueEntry {
     CertificationReq(CertificationReq),
+    BridgeReq(BridgeReq),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -55,6 +56,12 @@ pub(crate) struct CertificationReq {
     cert: String,
     user_ids: Vec<String>,
     days: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct BridgeReq {
+    cert: String,
+    scope_regexes: Vec<String>,
 }
 
 impl CertificationReq {
@@ -82,12 +89,18 @@ pub(crate) struct SplitOcaResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum QueueResponse {
     CertificationResp(CertificationResp),
+    BridgeResp(BridgeResp),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct CertificationResp {
     fingerprint: String,
     sigs: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct BridgeResp {
+    cert: String,
 }
 
 /// Backend for the secret-key-material relevant parts of a split CA instance
@@ -187,8 +200,29 @@ impl CaSec for SplitCa {
         ))
     }
 
-    fn bridge_to_remote_ca(&self, _remote_ca: Cert, _scope_regexes: Vec<String>) -> Result<Cert> {
-        todo!()
+    fn bridge_to_remote_ca(&self, remote_ca: Cert, scope_regexes: Vec<String>) -> Result<Cert> {
+        let c = pgp::cert_to_armored(&remote_ca)?;
+
+        let br = BridgeReq {
+            scope_regexes,
+            cert: c,
+        };
+
+        // Wrap the CertificationReq in a QueueEntry and store as a JSON string.
+        let qe = QueueEntry::BridgeReq(br);
+        let serialized = serde_json::to_string(&qe)?;
+
+        let q = NewQueue {
+            task: &serialized,
+            done: false,
+        };
+
+        // Store the certification task in the queue
+        self.db.queue_insert(q)?;
+
+        // The Signatures cannot be generated here, so we return the unchanged Cert
+        // FIXME: change return type?
+        Ok(remote_ca)
     }
 
     fn bridge_revoke(&self, _remote_ca: &Cert) -> Result<(Signature, Cert)> {
@@ -251,6 +285,15 @@ pub(crate) fn process(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> R
                 };
                 qrs.push_back((db_id, QueueResponse::CertificationResp(resp)));
             }
+            QueueEntry::BridgeReq(br) => {
+                let c = Cert::from_str(&br.cert)?;
+
+                let tsigned = ca_sec.bridge_to_remote_ca(c, br.scope_regexes)?;
+                let cert = pgp::cert_to_armored(&tsigned)?;
+
+                let resp = BridgeResp { cert };
+                qrs.insert(db_id, QueueResponse::BridgeResp(resp));
+            }
         }
     }
 
@@ -307,6 +350,11 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
                     // FIXME: mark queue entry as failed?
                     return Err(anyhow::anyhow!("failed to load fp {}", cr.fingerprint));
                 }
+            }
+            QueueResponse::BridgeResp(br) => {
+                // Merge update to bridge cert into database
+                // (presumably the update consists of a new tsig from our CA)
+                storage.cert_update(br.cert.as_bytes())?;
             }
         }
 
