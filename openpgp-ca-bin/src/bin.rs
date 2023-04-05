@@ -356,7 +356,7 @@ fn main() -> Result<()> {
                     let (email, fp) =
                         ca.add_bridge(email.as_deref(), &remote_key_file, scope.as_deref(), false)?;
 
-                    println!("Signed OpenPGP key for {} as bridge.\n", email);
+                    println!("Added OpenPGP key for {} as bridge.\n", email);
                     println!("The fingerprint of the remote CA key is");
                     println!("{fp}\n");
                 } else {
