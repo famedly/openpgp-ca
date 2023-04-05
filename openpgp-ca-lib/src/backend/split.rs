@@ -6,7 +6,6 @@
 
 use std::collections::LinkedList;
 use std::fs::File;
-use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -17,7 +16,7 @@ use chrono::{DateTime, Utc};
 use sequoia_openpgp::packet::{Signature, UserID};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::serialize::{Marshal, SerializeInto};
-use sequoia_openpgp::{Cert, Packet, PacketPile};
+use sequoia_openpgp::{Cert, Packet};
 use serde::{Deserialize, Serialize};
 
 use crate::db::models::{Bridge, Cacert, NewQueue, Queue, Revocation, User};
@@ -31,6 +30,12 @@ use crate::storage::{ca_get_cert_pub, CaStorage, CaStorageRW, CaStorageWrite, Qu
 //
 // NOTE: In most problematic cases, Serde will fail to deserialize before the version is read.
 const SPLIT_OCA_REQUEST_VERSION: u32 = 1;
+
+// Internal version identifier, to be incremented when the JSON request format changes
+// in an incompatible way.
+//
+// NOTE: In most problematic cases, Serde will fail to deserialize before the version is read.
+const SPLIT_OCA_RESPONSE_VERSION: u32 = 1;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct SplitOcaRequests {
@@ -64,6 +69,25 @@ impl CertificationReq {
     pub(crate) fn user_ids(&self) -> &[String] {
         &self.user_ids
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct SplitOcaResponse {
+    version: u32,
+    ca_fingerprint: String,
+    created: chrono::DateTime<chrono::Utc>, // informational timestamp
+    queue: LinkedList<(i32, QueueResponse)>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) enum QueueResponse {
+    CertificationResp(CertificationResp),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct CertificationResp {
+    fingerprint: String,
+    sigs: Vec<String>,
 }
 
 /// Backend for the secret-key-material relevant parts of a split CA instance
@@ -192,8 +216,8 @@ pub(crate) fn process(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> R
         ));
     }
 
-    // prepare output file
-    let mut output = File::create(export)?;
+    // queue responses
+    let mut qrs: LinkedList<(i32, QueueResponse)> = LinkedList::new();
 
     for (db_id, qe) in reqs.queue {
         match qe {
@@ -210,56 +234,85 @@ pub(crate) fn process(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> R
                     .collect();
 
                 // Generate certifications
-                let sigs = ca_sec.sign_user_ids(&c, &u[..], days_valid)?;
+                let s = ca_sec.sign_user_ids(&c, &u[..], days_valid)?;
 
-                let pp: PacketPile = sigs.into_iter().map(Packet::from).collect();
+                // Map Signatures to base64 encoded Strings
+                let mut sigs: Vec<_> = vec![];
+                for sig in s {
+                    let mut v: Vec<u8> = vec![];
+                    sig.serialize(&mut v)?;
+                    let base64: String = general_purpose::STANDARD_NO_PAD.encode(v);
+                    sigs.push(base64);
+                }
 
-                let mut v: Vec<u8> = vec![];
-                pp.serialize(&mut v)?;
-
-                let base64: String = general_purpose::STANDARD_NO_PAD.encode(v);
-
-                // Write a line in output file for this Signature
-                let fp = c.fingerprint().to_hex(); // FIXME: drop
-                writeln!(output, "{db_id} {fp} {base64}")?;
+                let resp = CertificationResp {
+                    sigs,
+                    fingerprint: c.fingerprint().to_hex(),
+                };
+                qrs.push_back((db_id, QueueResponse::CertificationResp(resp)));
             }
         }
     }
+
+    let sor = SplitOcaResponse {
+        version: SPLIT_OCA_RESPONSE_VERSION,
+        ca_fingerprint: ca_sec.cert()?.fingerprint().to_hex(),
+        created: chrono::offset::Utc::now(),
+        queue: qrs,
+    };
+
+    // Write to output file
+    let output = File::create(export)?;
+    serde_json::to_writer_pretty(output, &sor)?;
 
     Ok(())
 }
 
 pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Result<()> {
-    let file = File::open(file)?;
-    for line in std::io::BufReader::new(file).lines() {
-        let line = line?;
+    let input = File::open(file)?;
+    let sor: SplitOcaResponse = serde_json::from_reader(input)?;
 
-        let split: Vec<_> = line.split(' ').collect();
-        assert_eq!(split.len(), 3);
+    if sor.version != SPLIT_OCA_RESPONSE_VERSION {
+        return Err(anyhow::anyhow!(
+            "Unexpected response format version {}",
+            sor.version
+        ));
+    }
 
-        let db_id = i32::from_str(split[0])?;
+    if sor.ca_fingerprint != storage.ca_get_cert_pub()?.fingerprint().to_hex() {
+        return Err(anyhow::anyhow!(
+            "Unexpected remote CA {}",
+            sor.ca_fingerprint
+        ));
+    }
 
-        let fp = split[1];
+    for (db_id, qr) in sor.queue {
+        match qr {
+            QueueResponse::CertificationResp(cr) => {
+                let mut packets: Vec<Packet> = vec![];
+                for s in cr.sigs {
+                    let bytes = general_purpose::STANDARD
+                        .decode(s)
+                        .map_err(|e| anyhow::anyhow!("Error while decoding base64: {}", e))?;
+                    let s = Signature::from_bytes(&bytes)?.into();
+                    packets.push(s);
+                }
 
-        // base64-encoded serialized Signature
-        let sig = split[2];
-        let bytes = general_purpose::STANDARD.decode(sig).unwrap();
+                if let Some(cert) = storage.cert_by_fp(&cr.fingerprint)? {
+                    let c = Cert::from_str(&cert.pub_cert)?;
+                    let certified = c.insert_packets(packets)?;
 
-        let packets: Vec<_> = PacketPile::from_bytes(&bytes)?.into();
-
-        if let Some(cert) = storage.cert_by_fp(fp)? {
-            let c = Cert::from_str(&cert.pub_cert)?;
-            let certified = c.insert_packets(packets)?;
-
-            storage.cert_update(&certified.to_vec()?)?;
-
-            // Mark queue entry as done.
-            // FIXME: this should share a transaction with "cert_update"
-            storage.queue_mark_done(db_id)?;
-        } else {
-            // FIXME: mark queue entry as failed?
-            return Err(anyhow::anyhow!("failed to load fp {fp}"));
+                    storage.cert_update(&certified.to_vec()?)?;
+                } else {
+                    // FIXME: mark queue entry as failed?
+                    return Err(anyhow::anyhow!("failed to load fp {}", cr.fingerprint));
+                }
+            }
         }
+
+        // Mark queue entry as done.
+        // FIXME: this should share a transaction with "cert_update"
+        storage.queue_mark_done(db_id)?;
     }
 
     Ok(())
