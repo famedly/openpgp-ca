@@ -5,6 +5,7 @@
 // https://gitlab.com/openpgp-ca/openpgp-ca
 
 use anyhow::Result;
+use openpgp_ca_lib::Oca;
 use tempfile::TempDir;
 
 mod util;
@@ -17,42 +18,47 @@ fn split_certify() -> Result<()> {
     let mut csr_file = tmp_path.clone();
     csr_file.push("csr.txt");
 
-    let mut sigs_file = tmp_path;
+    let mut sigs_file = tmp_path.clone();
     sigs_file.push("certs.txt");
 
-    let (_gpg, cau1, cau2) = util::setup_two_uninit()?;
+    // Make new softkey CA
+    let (_gpg, cau) = util::setup_one_uninit()?;
+    let ca = cau.init_softkey("example.org", None)?;
 
-    // Make new backing CA
-    let ca1 = cau1.init_softkey("example.org", None)?;
-    let ca_cert = ca1.ca_get_pubkey_armored()?;
+    // Split softkey CA into back and front instances
+    let mut front_path = tmp_path.clone();
+    front_path.push("front.oca");
+    let mut back_path = tmp_path;
+    back_path.push("back.oca");
 
-    // Make new split-mode online CA with the same pubkey
-    let ca2 = cau2.init_split_front("example.org", ca_cert.as_bytes())?;
+    ca.ca_split_into(&front_path, &back_path)?;
+    let front = Oca::open(front_path.to_str())?;
+    let back = Oca::open(back_path.to_str())?;
 
     // Make user on online ca
-    ca2.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
+    front.user_new(Some("Alice"), &["alice@example.org"], None, false, false)?;
 
-    let certs = ca2.user_certs_get_all()?;
+    let certs = front.user_certs_get_all()?;
     assert_eq!(certs.len(), 1);
 
     let cert = &certs[0];
 
-    let alice = ca2.cert_check_ca_sig(cert)?;
+    let alice = front.cert_check_ca_sig(cert)?;
     assert_eq!(alice.certified.len(), 0);
     assert_eq!(alice.uncertified.len(), 1);
 
-    // Ask backing ca1 to certify alice
+    // Ask backing ca to certify alice
 
-    ca2.ca_split_export(csr_file.clone())?;
-    ca1.ca_split_process(csr_file, sigs_file.clone())?;
-    ca2.ca_split_import(sigs_file)?;
+    front.ca_split_export(csr_file.clone())?;
+    back.ca_split_process(csr_file, sigs_file.clone())?;
+    front.ca_split_import(sigs_file)?;
 
-    let certs = ca2.user_certs_get_all()?;
+    let certs = front.user_certs_get_all()?;
     assert_eq!(certs.len(), 1);
 
     let cert = &certs[0];
 
-    let alice = ca2.cert_check_ca_sig(cert)?;
+    let alice = front.cert_check_ca_sig(cert)?;
     assert_eq!(alice.certified.len(), 1);
     assert_eq!(alice.uncertified.len(), 0);
 
