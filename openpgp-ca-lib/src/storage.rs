@@ -201,6 +201,8 @@ pub(crate) trait CaStorageWrite {
         remote_email: &str,
         scope: &str,
     ) -> Result<models::Bridge>;
+
+    fn queue_mark_done(&self, id: i32) -> Result<()>;
 }
 
 pub(crate) trait CaStorageRW: CaStorage + CaStorageWrite {}
@@ -513,6 +515,19 @@ impl CaStorageWrite for DbCa {
                 cas_id: self.ca()?.id,
             };
             self.db.bridge_insert(new_bridge)
+        })
+    }
+
+    fn queue_mark_done(&self, id: i32) -> Result<()> {
+        self.transaction(|| {
+            let q = self.db.queue_by_id(id)?;
+
+            if let Some(mut q) = q {
+                q.done = true;
+                self.db.queue_update(&q)
+            } else {
+                Err(anyhow::anyhow!("Queue entry not found"))
+            }
         })
     }
 }

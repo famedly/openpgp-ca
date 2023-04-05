@@ -287,7 +287,9 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
 
             storage.cert_update(&certified.to_vec()?)?;
 
-            // FIXME: mark queue entry as done
+            // Mark queue entry as done.
+            // FIXME: this should share a transaction with "cert_update"
+            storage.queue_mark_done(db_id)?;
         } else {
             // FIXME: mark queue entry as failed?
             return Err(anyhow::anyhow!("failed to load fp {fp}"));
@@ -584,6 +586,10 @@ impl CaStorageWrite for SplitBackDb {
         Err(anyhow::anyhow!(
             "Unsupported operation on Split-mode backend CA"
         ))
+    }
+
+    fn queue_mark_done(&self, _id: i32) -> Result<()> {
+        unimplemented!("This should never be used with a SplitBackDb")
     }
 }
 

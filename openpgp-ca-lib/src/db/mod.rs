@@ -173,6 +173,19 @@ impl OcaDb {
         Ok(e[0].clone())
     }
 
+    pub(crate) fn queue_by_id(&self, id: i32) -> Result<Option<Queue>> {
+        let mut db: Vec<Queue> = queue::table
+            .filter(queue::id.eq(id))
+            .load::<Queue>(&self.conn)
+            .context("Error loading Queue by id")?;
+
+        match db.len() {
+            0 => Ok(None),
+            1 => Ok(Some(db.pop().unwrap())),
+            _ => Err(anyhow::anyhow!("queue_by_id: expected 0 or 1 entries")),
+        }
+    }
+
     pub(crate) fn queue_insert(&self, q: NewQueue) -> Result<()> {
         let inserted_count = diesel::insert_into(queue::table)
             .values(&q)
@@ -195,6 +208,15 @@ impl OcaDb {
             .order(queue::id)
             .load::<Queue>(&self.conn)
             .context("Error loading queue entries")
+    }
+
+    pub(crate) fn queue_update(&self, queue: &Queue) -> Result<()> {
+        diesel::update(queue)
+            .set(queue)
+            .execute(&self.conn)
+            .context("Error updating Queue")?;
+
+        Ok(())
     }
 
     // --- public ---
