@@ -120,9 +120,9 @@ impl SplitCa {
         if !queue.is_empty() {
             let mut qes: LinkedList<(i32, QueueEntry)> = LinkedList::new();
 
-            for entry in queue {
-                let task = entry.task;
-                let qe: QueueEntry = serde_json::from_str(&task)?;
+            for entry in &queue {
+                let task = &entry.task;
+                let qe: QueueEntry = serde_json::from_str(task)?;
 
                 qes.push_back((entry.id, qe));
             }
@@ -136,6 +136,11 @@ impl SplitCa {
 
             let output = File::create(output)?;
             serde_json::to_writer_pretty(output, &sor)?;
+
+            println!(
+                "Exported queue with {} entries for processing by the back instance",
+                queue.len()
+            );
         } else {
             println!("The queue contains no requests for the back instance, didn't export.");
         }
@@ -308,6 +313,8 @@ pub(crate) fn process(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> R
     let output = File::create(export)?;
     serde_json::to_writer_pretty(output, &sor)?;
 
+    println!("Processed {} certification requests", sor.queue.len());
+
     Ok(())
 }
 
@@ -329,7 +336,28 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
         ));
     }
 
+    let len = sor.queue.len();
+
+    // count queue entries that have already been imported (if any)
+    let mut done: usize = 0;
+
     for (db_id, qr) in sor.queue {
+        if let Some(q) = storage.queue(db_id)? {
+            // has this queue entry already been marked as "done"?
+
+            if q.done {
+                done += 1;
+
+                // already done: skip processing this entry
+                continue;
+            }
+        } else {
+            return Err(anyhow::anyhow!(
+                "Got a result for an unexpected queue id: {}",
+                db_id
+            ));
+        }
+
         match qr {
             QueueResponse::CertificationResp(cr) => {
                 let mut packets: Vec<Packet> = vec![];
@@ -361,6 +389,11 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
         // Mark queue entry as done.
         // FIXME: this should share a transaction with "cert_update"
         storage.queue_mark_done(db_id)?;
+    }
+
+    println!("Imported {len} certifications from the back instance.");
+    if done > 0 {
+        println!("WARN: {done} certifications were ignored (they were already imported).");
     }
 
     Ok(())
