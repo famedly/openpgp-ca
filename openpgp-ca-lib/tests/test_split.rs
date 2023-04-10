@@ -50,7 +50,7 @@ fn split_certify() -> Result<()> {
     // Ask backing ca to certify alice
 
     front.ca_split_export(csr_file.clone())?;
-    back.ca_split_process(csr_file, sigs_file.clone())?;
+    back.ca_split_certify(csr_file, sigs_file.clone())?;
     front.ca_split_import(sigs_file)?;
 
     let certs = front.user_certs_get_all()?;

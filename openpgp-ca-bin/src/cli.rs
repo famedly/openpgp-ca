@@ -446,8 +446,8 @@ pub enum SplitCommand {
         file: PathBuf,
     },
 
-    /// Process certification requests from a split-mode online instance.
-    Process {
+    /// Process certification requests on a split-mode back instance.
+    Certify {
         #[clap(
             short = 'i',
             long = "import",

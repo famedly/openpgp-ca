@@ -237,7 +237,7 @@ impl CaSec for SplitCa {
     }
 }
 
-pub(crate) fn process(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> Result<()> {
+pub(crate) fn certify(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> Result<()> {
     let input = File::open(import)?;
     let reqs: SplitOcaRequests = serde_json::from_reader(input)?;
 
