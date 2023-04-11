@@ -556,6 +556,16 @@ impl CaStorage for SplitBackDb {
         }
     }
 
+    fn queue(&self, id: i32) -> Result<Option<Queue>> {
+        if let Some(readonly) = &self.readonly {
+            readonly.queue_by_id(id)
+        } else {
+            Err(anyhow::anyhow!(
+                "Operation unsupported: split-mode backend CA without overlay database"
+            ))
+        }
+    }
+
     fn queue_not_done(&self) -> Result<Vec<models::Queue>> {
         if let Some(readonly) = &self.readonly {
             readonly.queue_not_done()

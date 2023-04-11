@@ -8,7 +8,7 @@ use diesel::result::Error;
 use sequoia_openpgp::{Cert, Packet};
 
 use crate::backend::Backend;
-use crate::db::models::NewQueue;
+use crate::db::models::{NewQueue, Queue};
 use crate::db::{models, OcaDb};
 use crate::pgp;
 
@@ -160,6 +160,7 @@ pub(crate) trait CaStorage {
     fn list_bridges(&self) -> Result<Vec<models::Bridge>>;
     fn bridge_by_email(&self, email: &str) -> Result<Option<models::Bridge>>;
 
+    fn queue(&self, id: i32) -> Result<Option<models::Queue>>;
     fn queue_not_done(&self) -> Result<Vec<models::Queue>>;
 }
 
@@ -300,6 +301,10 @@ impl CaStorage for DbCa {
 
     fn bridge_by_email(&self, email: &str) -> Result<Option<models::Bridge>> {
         self.db.bridge_by_email(email)
+    }
+
+    fn queue(&self, id: i32) -> Result<Option<Queue>> {
+        self.db.queue_by_id(id)
     }
 
     fn queue_not_done(&self) -> Result<Vec<models::Queue>> {
