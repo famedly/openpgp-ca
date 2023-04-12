@@ -330,16 +330,22 @@ pub fn cert_check_ca_sig(oca: &Oca, cert: &models::Cert) -> Result<Certification
     })
 }
 
-pub fn cert_check_tsig_on_ca(oca: &Oca, cert: &models::Cert) -> Result<bool> {
-    let ca = oca.ca_get_cert_pub()?;
-    let tsigs = pgp::get_trust_sigs(&ca)?;
-
-    let user_cert = pgp::to_cert(cert.pub_cert.as_bytes())?;
+/// Has "signer" tsigned "signee"?
+pub(crate) fn check_tsig_on_cert(signer: &Cert, signee: &Cert) -> Result<bool> {
+    let tsigs = pgp::get_trust_sigs(signee)?;
 
     Ok(tsigs.iter().any(|t| {
         t.issuer_fingerprints()
-            .any(|fp| fp == &user_cert.fingerprint())
+            .any(|fp| fp == &signer.fingerprint())
     }))
+}
+
+/// Has "cert" tsigned this CAs certificate?
+pub fn cert_check_tsig_on_ca(oca: &Oca, cert: &models::Cert) -> Result<bool> {
+    let ca = oca.ca_get_cert_pub()?;
+    let user_cert = pgp::to_cert(cert.pub_cert.as_bytes())?;
+
+    check_tsig_on_cert(&user_cert, &ca)
 }
 
 /// CA certifies either all or a subset of User IDs of cert.
