@@ -804,6 +804,22 @@ impl Oca {
         cert::cert_check_tsig_on_ca(self, cert).context("Failed while checking tsig on CA")
     }
 
+    /// Check if this CA has tsigned the bridge cert
+    pub fn check_tsig_on_bridge(&self, bridge: &models::Bridge) -> Result<bool> {
+        let ca = self.ca_get_cert_pub()?;
+
+        if let Some(br) = self.storage.cert_by_id(bridge.cert_id)? {
+            let bridge_cert = pgp::to_cert(br.pub_cert.as_bytes())?;
+
+            Ok(cert::check_tsig_on_cert(&ca, &bridge_cert)?)
+        } else {
+            Err(anyhow::anyhow!(
+                "No public key found for bridge to '{}'",
+                bridge.email
+            ))
+        }
+    }
+
     /// Check all Certs for certifications from the CA. If a certification
     /// expires in less than `threshold_days` and it is not marked as
     /// 'inactive', make a new certification that is good for
@@ -1242,9 +1258,21 @@ impl Oca {
     }
 
     pub fn list_bridges(&self) -> Result<()> {
-        self.bridges_get()?.iter().for_each(|bridge| {
-            println!("Bridge to '{}', (scope: '{}')", bridge.email, bridge.scope)
-        });
+        for bridge in self.bridges_get()? {
+            let tsigned = self.check_tsig_on_bridge(&bridge)?;
+
+            println!(
+                "Bridge to '{}'{}, (scope: '{}')",
+                bridge.email,
+                if !tsigned {
+                    " [no trust signature]"
+                } else {
+                    ""
+                },
+                bridge.scope,
+            )
+        }
+
         Ok(())
     }
 
