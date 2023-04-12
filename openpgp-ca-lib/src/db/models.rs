@@ -24,6 +24,7 @@ pub(crate) struct NewCa<'a> {
 }
 
 #[derive(Queryable, Debug, Associations, Clone, AsChangeset, Identifiable)]
+#[changeset_options(treat_none_as_null = "true")]
 #[belongs_to(Ca)]
 pub(crate) struct Cacert {
     pub id: i32,
@@ -47,6 +48,7 @@ pub(crate) struct NewCacert<'a> {
 
 /// A user as modeled in the CA
 #[derive(Identifiable, Queryable, Debug, Associations, Clone, AsChangeset, PartialEq, Eq, Hash)]
+#[changeset_options(treat_none_as_null = "true")]
 #[belongs_to(Ca)]
 pub struct User {
     pub id: i32,
@@ -64,6 +66,7 @@ pub(crate) struct NewUser<'a> {
 
 /// A user certificate as modeled in the CA (linked to users)
 #[derive(Identifiable, Queryable, Debug, Associations, Clone, AsChangeset, PartialEq, Eq, Hash)]
+#[changeset_options(treat_none_as_null = "true")]
 #[belongs_to(User)]
 pub struct Cert {
     pub id: i32,
