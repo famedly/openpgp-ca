@@ -620,7 +620,7 @@ impl CaStorageWrite for SplitBackDb {
         unimplemented!("This should never be used with a SplitBackDb")
     }
 
-    fn cacert_update(self, _cacert: &Cacert) -> Result<()> {
+    fn cacert_update(self: Box<Self>, _cacert: &Cacert) -> Result<()> {
         Err(anyhow::anyhow!(
             "Unsupported operation on Split-mode backend CA"
         ))

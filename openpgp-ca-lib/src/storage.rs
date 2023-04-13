@@ -152,7 +152,7 @@ pub(crate) trait CaStorage {
 pub(crate) trait CaStorageWrite {
     fn into_uninit(self: Box<Self>) -> UninitDb;
 
-    fn cacert_update(self, cacert: &models::Cacert) -> Result<()>;
+    fn cacert_update(self: Box<Self>, cacert: &models::Cacert) -> Result<()>;
 
     fn ca_import_tsig(&self, cert: &[u8]) -> Result<()>;
 
@@ -302,7 +302,7 @@ impl CaStorageWrite for DbCa {
         UninitDb::new(self.db)
     }
 
-    fn cacert_update(self, cacert: &models::Cacert) -> Result<()> {
+    fn cacert_update(self: Box<Self>, cacert: &models::Cacert) -> Result<()> {
         self.db.cacert_update(cacert)
     }
 
