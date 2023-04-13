@@ -330,6 +330,7 @@ fn main() -> Result<()> {
 
             cli::CaCommand::Split { cmd } => match cmd {
                 cli::SplitCommand::Into { front, back } => ca.ca_split_into(&front, &back)?,
+                cli::SplitCommand::Merge { back } => ca.ca_merge_split(&back)?,
 
                 cli::SplitCommand::Export { file } => ca.ca_split_export(file)?,
 

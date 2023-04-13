@@ -436,6 +436,12 @@ pub enum SplitCommand {
         back: PathBuf,
     },
 
+    /// Merge a back instance into a front CA, resulting in a regular "non-split" CA.
+    Merge {
+        #[clap(short = 'b', long = "back", help = "Filename for the back CA instance")]
+        back: PathBuf,
+    },
+
     /// Export certification requests from a split-mode online instance.
     Export {
         #[clap(

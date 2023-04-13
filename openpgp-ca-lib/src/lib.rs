@@ -724,6 +724,61 @@ impl Oca {
         }
     }
 
+    /// Merge a back CA into a front CA instance, resulting in a regular ("non-split") CA.
+    pub fn ca_merge_split(self, back: &Path) -> Result<()> {
+        match self.backend {
+            Backend::SplitFront => {
+                // get inner backend and cacert data from the back instance
+                if let Some(url) = back.to_str() {
+                    let back = OcaDb::new(url)?;
+                    let (_back_ca, back_cacert) = back.get_ca()?;
+
+                    let orig_back = Backend::from_config(back_cacert.backend.as_deref())?;
+                    if let Backend::SplitBack(inner) = orig_back {
+                        // update backend and cacert in front database
+
+                        let mut front_cacert = self.storage.cacert()?;
+
+                        if front_cacert.fingerprint != back_cacert.fingerprint {
+                            return Err(anyhow::anyhow!(
+                                "Front {} and back {} instance use different CA fingerprints",
+                                front_cacert.fingerprint,
+                                back_cacert.fingerprint
+                            ));
+                        }
+
+                        // The back CA contains private key material (in softkey mode).
+                        // Start from the back CA Cert, merge in the public material from the front CA.
+                        // Use the resulting merged cert for the newly merged CA.
+                        let back_cert = pgp::to_cert(back_cacert.priv_cert.as_bytes())?;
+                        let front_cert = pgp::to_cert(front_cacert.priv_cert.as_bytes())?;
+
+                        let ca_merged = back_cert.merge_public(front_cert)?;
+
+                        front_cacert.priv_cert = pgp::cert_to_armored_private_key(&ca_merged)?;
+
+                        // The backend config of the merged CA is the "inner" backend type of the back instance
+                        front_cacert.backend = inner.to_config();
+
+                        let db = self.storage;
+                        db.cacert_update(&front_cacert)?;
+                    }
+
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Failed to use back instance path ({:?})",
+                        back
+                    ))
+                }
+            }
+
+            _ => Err(anyhow::anyhow!(
+                "Merge operation not supported for this backend type"
+            )),
+        }
+    }
+
     /// Export certification requests for the backing CA in a simple human-readable output format
     /// (inspired by https://github.com/wiktor-k/airsigner/, but with some adjustments!).
     ///
