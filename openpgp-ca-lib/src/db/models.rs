@@ -9,6 +9,8 @@
 
 //! Database model for OpenPGP CA
 
+use chrono::NaiveDateTime;
+
 use crate::db::schema::*;
 
 #[derive(Queryable, Debug, Clone, AsChangeset, Identifiable)]
@@ -149,6 +151,7 @@ pub(crate) struct NewBridge<'a> {
 #[table_name = "queue"]
 pub struct Queue {
     pub id: i32,
+    pub created: NaiveDateTime,
     pub task: String,
     pub done: bool,
 }
@@ -156,6 +159,7 @@ pub struct Queue {
 #[derive(Insertable, Debug)]
 #[table_name = "queue"]
 pub(crate) struct NewQueue<'a> {
+    pub created: NaiveDateTime,
     pub task: &'a str,
     pub done: bool,
 }

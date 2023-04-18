@@ -24,7 +24,7 @@ softkey = []
 card = []
 
 [dependencies]
-diesel = { version = "1.4", features = ["sqlite"] }
+diesel = { version = "1.4", features = ["sqlite", "chrono"] }
 diesel_migrations = "1.4"
 
 anyhow = "1.0"

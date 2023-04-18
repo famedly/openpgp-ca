@@ -12,7 +12,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use sequoia_openpgp::packet::{Signature, UserID};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::serialize::{Marshal, SerializeInto};
@@ -178,7 +178,10 @@ impl CaSec for SplitCa {
         let qe = QueueEntry::CertificationReq(cr);
         let serialized = serde_json::to_string(&qe)?;
 
+        let created = Utc::now().naive_utc();
+
         let q = NewQueue {
+            created,
             task: &serialized,
             done: false,
         };
@@ -217,7 +220,10 @@ impl CaSec for SplitCa {
         let qe = QueueEntry::BridgeReq(br);
         let serialized = serde_json::to_string(&qe)?;
 
+        let created = Utc::now().naive_utc();
+
         let q = NewQueue {
+            created,
             task: &serialized,
             done: false,
         };
@@ -297,7 +303,7 @@ pub(crate) fn certify(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> R
                 let cert = pgp::cert_to_armored(&tsigned)?;
 
                 let resp = BridgeResp { cert };
-                qrs.insert(db_id, QueueResponse::BridgeResp(resp));
+                qrs.push_back((db_id, QueueResponse::BridgeResp(resp)));
             }
         }
     }

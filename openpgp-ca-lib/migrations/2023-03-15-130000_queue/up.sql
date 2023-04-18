@@ -10,6 +10,7 @@
 -- Queue for split mode operations
 CREATE TABLE queue (
   id INTEGER NOT NULL PRIMARY KEY,
+  created TIMESTAMP NOT NULL,
   task VARCHAR NOT NULL,
   done BOOLEAN NOT NULL
 );

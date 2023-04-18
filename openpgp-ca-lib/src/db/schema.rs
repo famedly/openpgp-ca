@@ -66,6 +66,7 @@ table! {
 table! {
     queue (id) {
         id -> Integer,
+        created -> Timestamp,
         task -> Text,
         done -> Bool,
     }
