@@ -12,7 +12,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use sequoia_openpgp::packet::{Signature, UserID};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::serialize::{Marshal, SerializeInto};
@@ -36,6 +36,8 @@ const SPLIT_OCA_REQUEST_VERSION: u32 = 1;
 //
 // NOTE: In most problematic cases, Serde will fail to deserialize before the version is read.
 const SPLIT_OCA_RESPONSE_VERSION: u32 = 1;
+
+const CHRONO_FMT_NAIVE: &str = "%Y-%m-%d %H:%M:%S";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct SplitOcaRequests {
@@ -400,6 +402,48 @@ pub(crate) fn ca_split_import(storage: &dyn CaStorageRW, file: PathBuf) -> Resul
     println!("Imported {len} certifications from the back instance.");
     if done > 0 {
         println!("WARN: {done} certifications were ignored (they were already imported).");
+    }
+
+    Ok(())
+}
+
+pub(crate) fn ca_split_show_queue(storage: &dyn CaStorageRW) -> Result<()> {
+    let queue = storage.queue_not_done()?;
+    for q in queue {
+        let qe: QueueEntry = serde_json::from_str(&q.task)?;
+        match qe {
+            QueueEntry::CertificationReq(cr) => {
+                let c = Cert::from_str(&cr.cert)?;
+
+                println!("Certification request [#{}]", q.id);
+                println!("  For User IDs {:?}", cr.user_ids);
+                println!("  On {}", c.fingerprint().to_hex());
+                if let Some(days) = cr.days {
+                    println!("  Limited to {} days", days);
+                } else {
+                    println!("  No expiration");
+                }
+                println!("  Queued: {} UTC", q.created.format(CHRONO_FMT_NAIVE));
+                println!();
+            }
+            QueueEntry::BridgeReq(br) => {
+                let c = Cert::from_str(&br.cert)?;
+
+                println!("Bridging request [#{}]", q.id,);
+                println!("  For {}", c.fingerprint().to_hex(),);
+                if br.scope_regexes.is_empty() {
+                    println!("  Unscoped.");
+                } else {
+                    print!("  Scoped to");
+                    for s in br.scope_regexes {
+                        print!(" '{}'", s)
+                    }
+                    println!();
+                }
+                println!("  Queued: {} UTC", q.created.format(CHRONO_FMT_NAIVE));
+                println!();
+            }
+        }
     }
 
     Ok(())

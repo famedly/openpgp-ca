@@ -338,6 +338,8 @@ fn main() -> Result<()> {
                 }
 
                 cli::SplitCommand::Import { import: file } => ca.ca_split_import(file)?,
+
+                cli::SplitCommand::ShowQueue {} => ca.ca_split_show_queue()?,
             },
         },
         cli::Commands::Bridge { cmd } => match cmd {

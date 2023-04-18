@@ -472,4 +472,7 @@ pub enum SplitCommand {
         )]
         import: PathBuf,
     },
+
+    /// Show queue entries in a front CA instance
+    ShowQueue,
 }

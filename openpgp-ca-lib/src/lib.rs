@@ -773,6 +773,16 @@ impl Oca {
         }
     }
 
+    /// Show the currently not done entries in the queue of a split mode front instance
+    pub fn ca_split_show_queue(&self) -> Result<()> {
+        match self.backend {
+            Backend::SplitFront => split::ca_split_show_queue(&*self.storage),
+            _ => Err(anyhow::anyhow!(
+                "Operation is only supported on split mode front instances."
+            )),
+        }
+    }
+
     // -------- users / certs
 
     /// Get a list of all User Certs
