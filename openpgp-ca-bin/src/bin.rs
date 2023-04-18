@@ -71,11 +71,6 @@ fn main() -> Result<()> {
 
         let ca = match backend {
             cli::Backend::Softkey => cau.init_softkey(domain, name.as_deref()),
-            cli::Backend::Split { public_key } => {
-                let ca_cert = std::fs::read(public_key)?;
-
-                cau.init_split_front(domain, &ca_cert)
-            }
             cli::Backend::Card {
                 ident,
                 pinpad,

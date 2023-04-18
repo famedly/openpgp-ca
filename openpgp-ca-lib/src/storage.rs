@@ -7,7 +7,6 @@ use anyhow::{Context, Result};
 use diesel::result::Error;
 use sequoia_openpgp::{Cert, Packet};
 
-use crate::backend::Backend;
 use crate::db::models::{NewQueue, Queue};
 use crate::db::{models, OcaDb};
 use crate::pgp;
@@ -100,20 +99,6 @@ impl UninitDb {
         let fp = cert.fingerprint().to_hex();
 
         self.db.ca_insert(domainname, &ca_key, &fp, None)
-    }
-
-    /// Initialize OpenPGP CA instance for split mode.
-    /// Takes a `cert` with public key material and initializes a split-mode CA.
-    pub(crate) fn ca_init_split(&self, domainname: &str, cert: &Cert) -> Result<()> {
-        if self.db.is_ca_initialized()? {
-            return Err(anyhow::anyhow!("CA has already been initialized",));
-        }
-
-        let ca = pgp::cert_to_armored(cert)?;
-        let fp = cert.fingerprint().to_hex();
-        let backend = Backend::SplitFront.to_config();
-
-        self.db.ca_insert(domainname, &ca, &fp, backend.as_deref())
     }
 }
 

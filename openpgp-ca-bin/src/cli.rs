@@ -126,12 +126,6 @@ pub enum Backend {
         )]
         pinpad: bool,
     },
-
-    /// Initialize an OpenPGP CA "online" split-mode instance (backed by a second CA instance).
-    Split {
-        /// The public key for the CA (must correspond with the backing CA)
-        public_key: PathBuf,
-    },
 }
 
 #[derive(Subcommand)]

@@ -187,17 +187,6 @@ impl Uninit {
         self.init_from_db_state()
     }
 
-    /// Init "split mode front" CA (which uses a second CA as its backend)
-    pub fn init_split_front(self, domainname: &str, ca_cert: &[u8]) -> Result<Oca> {
-        Self::check_domainname(domainname)?;
-        let cert = Cert::from_bytes(ca_cert).context("Cert::from_bytes failed")?;
-
-        self.storage
-            .transaction(|| self.storage.ca_init_split(domainname, &cert))?;
-
-        self.init_from_db_state()
-    }
-
     /// Init CA with OpenPGP card backend. Generate key material on the card.
     ///
     /// This assumes that:
