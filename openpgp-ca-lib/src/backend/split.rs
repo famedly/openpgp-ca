@@ -12,7 +12,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use sequoia_openpgp::packet::{Signature, UserID};
 use sequoia_openpgp::parse::Parse;
@@ -46,7 +46,7 @@ pub(crate) struct SplitOcaRequests {
     version: u32,
     ca_fingerprint: String,
     created: DateTime<Utc>, // informational timestamp
-    queue: LinkedList<(i32, QueueEntry)>,
+    queue: LinkedList<(i32, DateTime<Utc>, QueueEntry)>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -86,7 +86,7 @@ impl CertificationReq {
 pub(crate) struct SplitOcaResponse {
     version: u32,
     ca_fingerprint: String,
-    created: chrono::DateTime<chrono::Utc>, // informational timestamp
+    created: DateTime<Utc>, // informational timestamp
     queue: LinkedList<(i32, QueueResponse)>,
 }
 
@@ -122,13 +122,15 @@ impl SplitCa {
 
     pub(crate) fn export_csr_queue(output: PathBuf, queue: Vec<Queue>, ca_fp: &str) -> Result<()> {
         if !queue.is_empty() {
-            let mut qes: LinkedList<(i32, QueueEntry)> = LinkedList::new();
+            let mut qes: LinkedList<(i32, DateTime<Utc>, QueueEntry)> = LinkedList::new();
 
             for entry in &queue {
                 let task = &entry.task;
                 let qe: QueueEntry = serde_json::from_str(task)?;
 
-                qes.push_back((entry.id, qe));
+                let created = Utc.from_utc_datetime(&entry.created);
+
+                qes.push_back((entry.id, created, qe));
             }
 
             let sor = SplitOcaRequests {
@@ -339,7 +341,7 @@ pub(crate) fn certify(
     // queue responses
     let mut qrs: LinkedList<(i32, QueueResponse)> = LinkedList::new();
 
-    for (db_id, qe) in reqs.queue {
+    for (db_id, created, qe) in reqs.queue {
         match qe {
             QueueEntry::CertificationReq(cr) => {
                 // Cert/User ID that should be certified
@@ -355,7 +357,11 @@ pub(crate) fn certify(
 
                 if !batch {
                     // interactive mode
-                    println!("Request for User ID certification:");
+                    println!(
+                        "Request for User ID certification [created {}]:",
+                        created.format(CHRONO_FMT)
+                    );
+                    println!();
                     println!("Bind key {} with", c.fingerprint().to_hex(),);
                     for u in uids {
                         println!("- '{}'", u);
@@ -396,7 +402,11 @@ pub(crate) fn certify(
 
                 if !batch {
                     // interactive mode
-                    println!("Request for bridge certification:");
+                    println!(
+                        "Request for bridge certification [created {}]:",
+                        created.format(CHRONO_FMT)
+                    );
+                    println!();
                     println!("Remote key {}", c.fingerprint().to_hex());
                     println!("Scoped for:");
                     for scope in &br.scope_regexes {
@@ -429,7 +439,7 @@ pub(crate) fn certify(
     let sor = SplitOcaResponse {
         version: SPLIT_OCA_RESPONSE_VERSION,
         ca_fingerprint: ca_sec.cert()?.fingerprint().to_hex(),
-        created: chrono::offset::Utc::now(),
+        created: Utc::now(),
         queue: qrs,
     };
 
