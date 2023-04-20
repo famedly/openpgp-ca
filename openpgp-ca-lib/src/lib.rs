@@ -808,10 +808,14 @@ impl Oca {
     }
 
     /// Process certification requests in a SplitBack instance
-    pub fn ca_split_certify(&self, import: PathBuf, export: PathBuf) -> Result<()> {
-        // FIXME: check if our backend allows processing of split-mode certification requests!
+    ///
+    /// When "batch" is false, this fn is interactive.
+    ///
+    /// In interactive mode, it reads KeyEvents for user feedback
+    /// about certification operations.
+    pub fn ca_split_certify(&self, import: PathBuf, export: PathBuf, batch: bool) -> Result<()> {
         match self.backend {
-            Backend::SplitBack(_) => split::certify(&*self.secret, import, export),
+            Backend::SplitBack(_) => split::certify(&*self.secret, import, export, batch),
             _ => Err(anyhow::anyhow!(
                 "Operation is only supported on split mode back instances."
             )),

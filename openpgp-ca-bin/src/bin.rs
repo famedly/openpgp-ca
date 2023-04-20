@@ -334,9 +334,11 @@ fn main() -> Result<()> {
 
                 cli::SplitCommand::Export { file } => ca.ca_split_export(file)?,
 
-                cli::SplitCommand::Certify { import, export } => {
-                    ca.ca_split_certify(import, export)?
-                }
+                cli::SplitCommand::Certify {
+                    import,
+                    export,
+                    batch,
+                } => ca.ca_split_certify(import, export, batch)?,
 
                 cli::SplitCommand::Import { import: file } => ca.ca_split_import(file)?,
 

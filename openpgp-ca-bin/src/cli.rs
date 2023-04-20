@@ -467,6 +467,12 @@ pub enum SplitCommand {
             help = "File to export the generated certifications to"
         )]
         export: PathBuf,
+
+        #[clap(
+            long = "batch",
+            help = "Generate certifications in non-interactive batch mode"
+        )]
+        batch: bool,
     },
 
     /// Import certifications from the split-mode backing instance.

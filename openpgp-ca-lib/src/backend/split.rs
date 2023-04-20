@@ -12,7 +12,8 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use sequoia_openpgp::packet::{Signature, UserID};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::serialize::{Marshal, SerializeInto};
@@ -37,6 +38,7 @@ const SPLIT_OCA_REQUEST_VERSION: u32 = 1;
 // NOTE: In most problematic cases, Serde will fail to deserialize before the version is read.
 const SPLIT_OCA_RESPONSE_VERSION: u32 = 1;
 
+const CHRONO_FMT: &str = "%Y-%m-%d %H:%M:%S %Z";
 const CHRONO_FMT_NAIVE: &str = "%Y-%m-%d %H:%M:%S";
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -245,7 +247,71 @@ impl CaSec for SplitCa {
     }
 }
 
-pub(crate) fn certify(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> Result<()> {
+fn gen_certification(
+    ca_sec: &dyn CaSec,
+    c: &Cert,
+    uids: &[String],
+    days_valid: Option<u64>,
+) -> Result<QueueResponse> {
+    let u: Vec<_> = c
+        .userids()
+        .filter(|u| uids.contains(&u.userid().to_string()))
+        .map(|ca| ca.userid())
+        .collect();
+
+    // Generate certifications
+    let s = ca_sec.sign_user_ids(c, &u[..], days_valid)?;
+
+    // Map Signatures to base64 encoded Strings
+    let mut sigs: Vec<_> = vec![];
+    for sig in s {
+        let mut v: Vec<u8> = vec![];
+        sig.serialize(&mut v)?;
+        let base64: String = general_purpose::STANDARD_NO_PAD.encode(v);
+        sigs.push(base64);
+    }
+
+    let resp = CertificationResp {
+        sigs,
+        fingerprint: c.fingerprint().to_hex(),
+    };
+
+    Ok(QueueResponse::CertificationResp(resp))
+}
+
+fn gen_bridge(ca_sec: &dyn CaSec, c: Cert, scope_regexes: Vec<String>) -> Result<QueueResponse> {
+    let tsigned = ca_sec.bridge_to_remote_ca(c, scope_regexes)?;
+    let cert = pgp::cert_to_armored(&tsigned)?;
+
+    let resp = BridgeResp { cert };
+
+    Ok(QueueResponse::BridgeResp(resp))
+}
+
+fn get_raw_key() -> Result<KeyEvent> {
+    crossterm::terminal::enable_raw_mode()?;
+
+    // Loop until we get a KeyEvent
+    loop {
+        let event = read()?;
+
+        if let Event::Key(key_event) = event {
+            crossterm::terminal::disable_raw_mode()?;
+
+            return Ok(key_event);
+        }
+    }
+}
+
+// FIXME:
+// The interactive handling of certifications should take place in the frontend,
+// not in this library.
+pub(crate) fn certify(
+    ca_sec: &dyn CaSec,
+    import: PathBuf,
+    export: PathBuf,
+    batch: bool,
+) -> Result<()> {
     let input = File::open(import)?;
     let reqs: SplitOcaRequests = serde_json::from_reader(input)?;
 
@@ -263,6 +329,13 @@ pub(crate) fn certify(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> R
         ));
     }
 
+    println!(
+        "Processing {} certification requests, exported on {}.",
+        reqs.queue.len(),
+        reqs.created.format(CHRONO_FMT)
+    );
+    println!();
+
     // queue responses
     let mut qrs: LinkedList<(i32, QueueResponse)> = LinkedList::new();
 
@@ -274,38 +347,81 @@ pub(crate) fn certify(ca_sec: &dyn CaSec, import: PathBuf, export: PathBuf) -> R
                 let days_valid = cr.days();
                 let uids = cr.user_ids();
 
-                let u: Vec<_> = c
-                    .userids()
-                    .filter(|u| uids.contains(&u.userid().to_string()))
-                    .map(|ca| ca.userid())
-                    .collect();
-
-                // Generate certifications
-                let s = ca_sec.sign_user_ids(&c, &u[..], days_valid)?;
-
-                // Map Signatures to base64 encoded Strings
-                let mut sigs: Vec<_> = vec![];
-                for sig in s {
-                    let mut v: Vec<u8> = vec![];
-                    sig.serialize(&mut v)?;
-                    let base64: String = general_purpose::STANDARD_NO_PAD.encode(v);
-                    sigs.push(base64);
-                }
-
-                let resp = CertificationResp {
-                    sigs,
-                    fingerprint: c.fingerprint().to_hex(),
+                let mut doit = || -> Result<()> {
+                    let qr = gen_certification(ca_sec, &c, uids, days_valid)?;
+                    qrs.push_back((db_id, qr));
+                    Ok(())
                 };
-                qrs.push_back((db_id, QueueResponse::CertificationResp(resp)));
+
+                if !batch {
+                    // interactive mode
+                    println!("Request for User ID certification:");
+                    println!("Bind key {} with", c.fingerprint().to_hex(),);
+                    for u in uids {
+                        println!("- '{}'", u);
+                    }
+
+                    // FIXME: show if a previous certification by this CA exists
+                    // and inform the CA operator, if so.
+                    // [see sequoia-sq:src/commands/mod.rs:active_certification]
+
+                    println!();
+                    println!("Certify? [y/n]");
+
+                    let key_event = get_raw_key()?;
+                    if key_event.code == KeyCode::Char('y')
+                        && key_event.modifiers == KeyModifiers::NONE
+                    {
+                        doit()?;
+                    } else {
+                        println!();
+                        println!("Skipping this queue entry");
+                    }
+
+                    println!();
+                    println!();
+                } else {
+                    // batch mode
+                    doit()?;
+                }
             }
             QueueEntry::BridgeReq(br) => {
                 let c = Cert::from_str(&br.cert)?;
 
-                let tsigned = ca_sec.bridge_to_remote_ca(c, br.scope_regexes)?;
-                let cert = pgp::cert_to_armored(&tsigned)?;
+                let mut doit = || -> Result<()> {
+                    let qr = gen_bridge(ca_sec, c.clone(), br.scope_regexes.clone())?;
+                    qrs.push_back((db_id, qr));
+                    Ok(())
+                };
 
-                let resp = BridgeResp { cert };
-                qrs.push_back((db_id, QueueResponse::BridgeResp(resp)));
+                if !batch {
+                    // interactive mode
+                    println!("Request for bridge certification:");
+                    println!("Remote key {}", c.fingerprint().to_hex());
+                    println!("Scoped for:");
+                    for scope in &br.scope_regexes {
+                        println!("- '{}'", scope);
+                    }
+
+                    println!();
+                    println!("Certify? [y/n]");
+
+                    let key_event = get_raw_key()?;
+                    if key_event.code == KeyCode::Char('y')
+                        && key_event.modifiers == KeyModifiers::NONE
+                    {
+                        doit()?;
+                    } else {
+                        println!();
+                        println!("Skipping this queue entry");
+                    }
+
+                    println!();
+                    println!();
+                } else {
+                    // batch mode
+                    doit()?;
+                }
             }
         }
     }
