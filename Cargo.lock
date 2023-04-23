@@ -1807,7 +1807,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openpgp-ca"
-version = "0.13.0-pre"
+version = "0.13.0-alpha.1"
 dependencies = [
  "anyhow",
  "clap 4.1.11",
@@ -1818,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "openpgp-ca-lib"
-version = "0.13.0-pre"
+version = "0.13.0-alpha.1"
 dependencies = [
  "addr",
  "anyhow",

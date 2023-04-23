@@ -3,7 +3,7 @@
 
 [package]
 name = "openpgp-ca-lib"
-version = "0.13.0-pre"
+version = "0.13.0-alpha.1"
 description = "OpenPGP CA is a tool for managing and certifying OpenPGP keys"
 authors = ["Heiko Schaefer <heiko@schaefer.name>"]
 license = "GPL-3.0-or-later"
