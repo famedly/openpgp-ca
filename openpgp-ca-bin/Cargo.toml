@@ -19,7 +19,8 @@ name = "oca"
 path = "src/bin.rs"
 
 [dependencies]
-clap = { version = "3", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
+lazy_static = "1"
 anyhow = "1.0"
 rpassword = "7"
 

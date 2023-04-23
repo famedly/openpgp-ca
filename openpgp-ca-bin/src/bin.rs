@@ -6,9 +6,18 @@
 
 use anyhow::Result;
 use clap::{CommandFactory, FromArgMatches};
+use lazy_static::lazy_static;
 use openpgp_ca_lib::{pgp, Oca, Uninit};
 
 mod cli;
+
+lazy_static! {
+    static ref VER: String = format!(
+        "{} (openpgp-ca-lib {})",
+        env!("CARGO_PKG_VERSION"),
+        openpgp_ca_lib::VERSION,
+    );
+}
 
 fn find_one_empty_card(ident: &Option<String>) -> Result<String> {
     if let Some(ident) = ident {
@@ -45,13 +54,7 @@ fn find_one_matching_card(ident: &Option<String>, cert: &[u8]) -> Result<String>
 }
 
 fn main() -> Result<()> {
-    let version = format!(
-        "{} (openpgp-ca-lib {})",
-        env!("CARGO_PKG_VERSION"),
-        openpgp_ca_lib::VERSION,
-    );
-
-    let cli = cli::Cli::command().version(&*version);
+    let cli = cli::Cli::command().version(&**VER);
 
     let c = cli::Cli::from_arg_matches(&cli.get_matches())?;
     let db = c.database.as_deref();

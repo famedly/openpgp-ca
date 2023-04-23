@@ -6,14 +6,13 @@
 
 use std::path::PathBuf;
 
-use clap::{AppSettings, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[clap(
     name = "openpgp-ca",
     author = "Heiko Schäfer <heiko@schaefer.name>",
     version,
-    global_setting(AppSettings::DeriveDisplayOrder),
     about = "OpenPGP CA is a tool for managing OpenPGP keys within organizations."
 )]
 pub struct Cli {
@@ -241,7 +240,6 @@ pub enum UserCommand {
             long = "email",
             required = true,
             number_of_values = 1,
-            multiple = true,
             help = "Email address"
         )]
         email: Vec<String>,
@@ -274,7 +272,6 @@ pub enum UserCommand {
             long = "email",
             required = true,
             number_of_values = 1,
-            multiple = true,
             help = "Email address"
         )]
         email: Vec<String>,
@@ -293,7 +290,6 @@ pub enum UserCommand {
             short = 'r',
             long = "revocation-file",
             number_of_values = 1,
-            multiple = true,
             help = "File that contains a revocation cert for this user"
         )]
         revocation_file: Vec<PathBuf>,
