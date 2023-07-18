@@ -235,6 +235,13 @@ pub enum CaCommand {
     },
 }
 
+fn duration_parser(s: &str) -> Result<u64, String> {
+    match humantime::parse_duration(s) {
+        Ok(duration) => Ok(duration.as_secs() / (60*60*24)),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 #[derive(Subcommand)]
 pub enum UserCommand {
     /// Add User (create new Key-Pair)
@@ -250,6 +257,9 @@ pub enum UserCommand {
 
         #[clap(short = 'n', long = "name", help = "Descriptive User Name")]
         name: Option<String>,
+
+        #[clap(short = 'v', long = "validity", help = "Validity Period", value_parser = duration_parser)]
+        validity_days: Option<u64>,
 
         #[clap(
             short = 'm',

@@ -229,6 +229,7 @@ fn main() -> Result<()> {
             cli::UserCommand::Add {
                 email,
                 name,
+                validity_days,
                 minimal,
                 password_file,
                 cipher_suite,
@@ -243,7 +244,7 @@ fn main() -> Result<()> {
                 ca.user_new(
                     name.as_deref(),
                     &emails[..],
-                    None,
+                    validity_days,
                     true,
                     password_file,
                     minimal,
