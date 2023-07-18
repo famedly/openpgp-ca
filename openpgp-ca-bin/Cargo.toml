@@ -23,5 +23,6 @@ clap = { version = "4", features = ["derive"] }
 lazy_static = "1"
 anyhow = "1.0"
 rpassword = "7"
+humantime = "2.1.0"
 
 openpgp-ca-lib = { path = "../openpgp-ca-lib", version = "0.13" }

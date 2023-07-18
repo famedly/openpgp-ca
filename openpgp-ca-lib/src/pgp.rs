@@ -8,6 +8,7 @@
 
 use std::convert::TryInto;
 use std::str::FromStr;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use anyhow::{Context, Result};
@@ -172,6 +173,7 @@ pub(crate) fn make_ca_cert(
 pub(crate) fn make_user_cert(
     emails: &[&str],
     name: Option<&str>,
+    validity_days: Option<u64>,
     password: bool,
     cipher_suite: Option<CipherSuite>,
     enable_encryption_subkey: bool,
@@ -203,6 +205,10 @@ pub(crate) fn make_user_cert(
 
     if let Some(pass) = &pass {
         builder = builder.set_password(Some(pass.to_owned().into()));
+    }
+
+    if let Some(validity_days) = &validity_days {
+        builder = builder.set_validity_period(Duration::from_secs(validity_days * SECONDS_IN_DAY));
     }
 
     for email in emails {

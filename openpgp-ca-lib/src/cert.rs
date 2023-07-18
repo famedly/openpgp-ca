@@ -35,6 +35,7 @@ pub fn user_new(
     let (user_key, user_revoc, pass) = pgp::make_user_cert(
         emails,
         name,
+        duration_days,
         password,
         cipher_suite,
         enable_encryption_subkey,
