@@ -4,6 +4,7 @@
 // This file is part of OpenPGP CA
 // https://gitlab.com/openpgp-ca/openpgp-ca
 
+use std::env;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -13,7 +14,37 @@ use tempfile::TempDir;
 mod util;
 
 #[test]
-fn split_certify() -> Result<()> {
+#[cfg_attr(not(feature = "softkey"), ignore)]
+fn split_certify_soft() -> Result<()> {
+    let (_gpg, cau) = util::setup_one_uninit()?;
+
+    // Make new softkey CA
+    let ca = cau.init_softkey("example.org", None)?;
+
+    split_certify(ca)
+}
+
+#[test]
+#[cfg_attr(not(feature = "card"), ignore)]
+fn split_certify_card() -> Result<()> {
+    let ident = env::var("IDENT").expect("IDENT is unset in environment");
+    util::reset_card(&ident)?;
+
+    let (_gpg, cau) = util::setup_one_uninit()?;
+
+    // Make new card-based CA
+    let (ca, _privkey) = cau.init_card_generate_on_host(&ident, "example.org", None)?;
+
+    split_certify(ca)
+}
+
+/// Tests certifying a User ID in a split CA.
+///
+/// Split `ca` into a front and back instance.
+/// Create a user "Alice" in the front instance (causing a certification request).
+/// Perform an export-certify-import cycle between front and back instance.
+/// Assert that Alice's User ID is certified in the front instance.
+fn split_certify(ca: Oca) -> Result<()> {
     let tmp_dir = TempDir::new()?;
     let tmp_path = tmp_dir.into_path();
 
@@ -23,11 +54,7 @@ fn split_certify() -> Result<()> {
     let mut sigs_file = tmp_path.clone();
     sigs_file.push("certs.txt");
 
-    // Make new softkey CA
-    let (_gpg, cau) = util::setup_one_uninit()?;
-    let ca = cau.init_softkey("example.org", None)?;
-
-    // Split softkey CA into back and front instances
+    // Split original CA into back and front instances
     let mut front_path = tmp_path.clone();
     front_path.push("front.oca");
     let mut back_path = tmp_path;
@@ -68,7 +95,38 @@ fn split_certify() -> Result<()> {
 }
 
 #[test]
-fn split_add_bridge() -> Result<()> {
+#[cfg_attr(not(feature = "softkey"), ignore)]
+fn split_add_bridge_soft() -> Result<()> {
+    let (_gpg, cau) = util::setup_one_uninit()?;
+
+    // Make new softkey CA
+    let ca = cau.init_softkey("example.org", None)?;
+
+    split_add_bridge(ca)
+}
+
+#[test]
+#[cfg_attr(not(feature = "card"), ignore)]
+fn split_add_bridge_card() -> Result<()> {
+    let ident = env::var("IDENT").expect("IDENT is unset in environment");
+    util::reset_card(&ident)?;
+
+    let (_gpg, cau) = util::setup_one_uninit()?;
+
+    // Make new card-based CA
+    let (ca, _privkey) = cau.init_card_generate_on_host(&ident, "example.org", None)?;
+
+    split_add_bridge(ca)
+}
+
+/// Tests configuring a remote CA as a bridge in a split CA.
+///
+/// Split `ca1` into a front and back instance.
+/// Create a separate (softkey based) `ca2` to act as a "remote" CA.
+/// Configured as a bridge in `ca1`.
+/// Perform an export-certify-import cycle between front and back instance.
+/// Assert that `ca2` is certified as a bridge in the front instance.
+fn split_add_bridge(ca1: Oca) -> Result<()> {
     let tmp_dir = TempDir::new()?;
     let tmp_path = tmp_dir.into_path();
 
@@ -78,9 +136,8 @@ fn split_add_bridge() -> Result<()> {
     let mut sigs_file = tmp_path.clone();
     sigs_file.push("certs.txt");
 
-    // Make new softkey CA
-    let (gpg, cau1, cau2) = util::setup_two_uninit()?;
-    let ca1 = cau1.init_softkey("example.org", None)?;
+    // Make new "remote" softkey CA
+    let (gpg, cau2) = util::setup_one_uninit()?;
     let ca2 = cau2.init_softkey("remote.example", None)?;
 
     // Split softkey CA into back and front instances
@@ -118,7 +175,6 @@ fn split_add_bridge() -> Result<()> {
     // load bridges from front instance
     let bridges = front.bridges_get()?;
     assert_eq!(bridges.len(), 1);
-
     let bridge = &bridges[0];
 
     let tsig = front.check_tsig_on_bridge(bridge)?;
