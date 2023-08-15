@@ -58,10 +58,10 @@ cargo-test-card:
     - apt clean
     - sh /start.sh
   script:
-    # No parallelism ("--jobs 1")!
+    # No parallelism ("--test-threads=1")!
     # There is only one virtual card in the CI environment,
     # it can't be used from multiple tests in parallel.
-    - IDENT="0000:00000000" cargo test --jobs 1 --package openpgp-ca-lib --no-default-features --features card
+    - IDENT="0000:00000000" cargo test --package openpgp-ca-lib --no-default-features --features card -- --test-threads=1
   interruptible: true
 
 pages:
