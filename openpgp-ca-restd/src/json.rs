@@ -164,7 +164,7 @@ pub struct ReturnError {
 
 impl From<ReturnError> for BadRequest<Json<ReturnError>> {
     fn from(re: ReturnError) -> Self {
-        BadRequest(Some(Json(re)))
+        BadRequest(Json(re))
     }
 }
 
@@ -235,7 +235,7 @@ impl CertError {
     ) -> BadRequest<Json<ReturnBadJson>> {
         let re = CertError::new(status, msg);
         let rbj = ReturnBadJson::new(re, ci);
-        BadRequest(Some(Json(rbj)))
+        BadRequest(Json(rbj))
     }
 }
 
