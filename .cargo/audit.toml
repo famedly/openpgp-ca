@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Heiko Schaefer <heiko@schaefer.name>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[advisories]
+ignore = [
+    # FIXME: CVE-2022-35737, in libsqlite3-sys
+    # We should eventually upgrade to diesel 2, until then we'll ignore this advisory.
+    "RUSTSEC-2022-0090",
+
+    # "Marvin Attack" in the rsa crate.
+    # Should not be relevant, since the rsa crate is not used for secret key operations, in openpgp-card-sequoia.
+    "RUSTSEC-2023-0071",
+
+    # dev-dependencies only: rusqlite is only used for tests
+    "RUSTSEC-2020-0014",
+
+    # dev-dependencies only: time is only pulled in as a dependency of rusqlite
+    "RUSTSEC-2020-0071"
+]
