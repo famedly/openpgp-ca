@@ -19,14 +19,14 @@ mod process_certs;
 mod restd;
 pub mod util;
 
+use clap::Parser;
 use cli::RestdCli;
-use structopt::StructOpt;
 
 #[launch]
 fn rocket() -> rocket::Rocket<rocket::Build> {
-    let cli = RestdCli::from_args();
+    let cli = RestdCli::parse();
 
-    let db = RestdCli::from_args().database;
+    let db = cli.database;
 
     match cli.cmd {
         cli::Command::Run => restd::run(db),

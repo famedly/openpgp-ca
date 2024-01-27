@@ -19,8 +19,7 @@ name = "openpgp-ca-restd"
 path = "src/bin.rs"
 
 [dependencies]
-structopt = "0.3"
-clap = "4"
+clap = { version = "4", features = ["derive"] }
 once_cell = "1.4"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
