@@ -463,7 +463,7 @@ impl OcaDb {
             .load::<Cert>(&self.conn)
             .context("Error loading Cert by id")?;
 
-        Ok(db.get(0).cloned())
+        Ok(db.first().cloned())
     }
 
     pub(crate) fn cert_by_fp(&self, fingerprint: &str) -> Result<Option<Cert>> {
@@ -536,7 +536,7 @@ impl OcaDb {
             "unexpected duplicate hash in revocations table"
         );
 
-        Ok(db.get(0).cloned())
+        Ok(db.first().cloned())
     }
 
     pub(crate) fn revocation_update(&self, revocation: &Revocation) -> Result<()> {

@@ -603,7 +603,7 @@ fn test_apply_revocation(ca: Oca) -> Result<()> {
 
     let rev = ca.revocations_get(alice)?;
     assert_eq!(rev.len(), 1);
-    assert!(rev.get(0).unwrap().published);
+    assert!(rev.first().unwrap().published);
 
     Ok(())
 }

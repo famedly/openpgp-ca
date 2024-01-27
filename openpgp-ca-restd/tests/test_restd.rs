@@ -256,7 +256,7 @@ async fn test_restd() {
     assert!(res.is_ok());
     let ret = res.unwrap();
     assert_eq!(ret.len(), 1);
-    let ret = ret.get(0).unwrap();
+    let ret = ret.first().unwrap();
 
     let alice_fp = if let CertResultJson::Good(ret) = ret {
         assert_eq!(ret.action, Some(Action::New));
@@ -285,7 +285,7 @@ async fn test_restd() {
     assert!(res.is_ok());
     let res = res.unwrap();
     assert_eq!(res.len(), 1);
-    let res = res.get(0).unwrap();
+    let res = res.first().unwrap();
 
     if let CertResultJson::Bad(res) = res {
         assert_eq!(res.error[0].status, CertStatus::CertMissingLocalUserId);
@@ -312,7 +312,7 @@ async fn test_restd() {
     assert!(res.is_ok());
     let res = res.unwrap();
     assert_eq!(res.len(), 1);
-    let res = res.get(0).unwrap();
+    let res = res.first().unwrap();
 
     if let CertResultJson::Bad(res) = res {
         assert_eq!(res.error[0].status, CertStatus::PrivateKey);
@@ -335,7 +335,7 @@ async fn test_restd() {
     // check that return data has the expected shape
     let ret = res.unwrap();
     assert_eq!(ret.len(), 1);
-    let ret = ret.get(0).unwrap();
+    let ret = ret.first().unwrap();
     if let CertResultJson::Good(ret) = ret {
         assert_eq!(ret.action, Some(Action::New));
         assert_eq!(
@@ -349,7 +349,7 @@ async fn test_restd() {
     assert!(res.is_ok());
     let ret = res.unwrap();
     assert_eq!(ret.len(), 1);
-    let ret = ret.get(0).unwrap();
+    let ret = ret.first().unwrap();
 
     if let CertResultJson::Good(ret) = ret {
         assert_eq!(ret.action, Some(Action::Update));
@@ -376,7 +376,7 @@ async fn test_restd() {
     assert!(res.is_ok());
     let ret = res.unwrap();
     assert_eq!(ret.len(), 1);
-    let ret = ret.get(0).unwrap();
+    let ret = ret.first().unwrap();
     if let CertResultJson::Bad(bad) = ret {
         assert_eq!(bad.error.len(), 1);
         assert_eq!(bad.error[0].status, CertStatus::InternalError);
@@ -540,7 +540,7 @@ async fn test_restd() {
     assert!(res.is_ok());
     let res = res.unwrap();
     assert_eq!(res.len(), 1);
-    let res = res.get(0).unwrap();
+    let res = res.first().unwrap();
 
     if let CertResultJson::Bad(bad) = res {
         assert_eq!(
