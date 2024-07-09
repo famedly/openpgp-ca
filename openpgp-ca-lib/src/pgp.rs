@@ -91,9 +91,7 @@ pub(crate) fn make_ca_cert(
 ) -> Result<(Cert, Signature)> {
     // Generate key for a new CA
     let (mut ca_key, revocation) = cert::CertBuilder::new()
-        // RHEL7 [eol 2026] is shipped with GnuPG 2.0.x, which doesn't
-        // support ECC
-        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::RSA4k).into())
+        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::Cv25519).into())
         .add_signing_subkey()
         // FIXME: set expiration from CLI
         // .set_validity_period()
@@ -181,7 +179,7 @@ pub(crate) fn make_user_cert(
     let pass = if password { Some(diceware()) } else { None };
 
     let mut builder = cert::CertBuilder::new()
-        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::RSA4k).into());
+        .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::Cv25519).into());
 
     if enable_encryption_subkey {
         builder = builder.add_subkey(
