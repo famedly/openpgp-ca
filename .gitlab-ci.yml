@@ -83,7 +83,7 @@ build_docker:
     IMAGE_LATEST: $CI_REGISTRY_IMAGE:latest
     IMAGE_SHA: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
   services:
-      - docker:stable-dind
+    - docker:dind
   before_script:
     - docker info
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
@@ -103,7 +103,7 @@ build_docker_restd:
     IMAGE_LATEST: $CI_REGISTRY_IMAGE/openpgp-ca-restd:latest
     IMAGE_SHA: $CI_REGISTRY_IMAGE/openpgp-ca-restd:$CI_COMMIT_SHA
   services:
-    - docker:stable-dind
+    - docker:dind
   before_script:
     - docker info
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
