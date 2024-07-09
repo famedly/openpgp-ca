@@ -269,7 +269,7 @@ fn gen_certification(
     for sig in s {
         let mut v: Vec<u8> = vec![];
         sig.serialize(&mut v)?;
-        let base64: String = general_purpose::STANDARD_NO_PAD.encode(v);
+        let base64: String = general_purpose::STANDARD.encode(v);
         sigs.push(base64);
     }
 
