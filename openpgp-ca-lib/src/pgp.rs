@@ -7,6 +7,8 @@
 //! PGP helper functions.
 
 use std::convert::TryInto;
+use std::io;
+use std::io::BufRead;
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -167,16 +169,41 @@ pub(crate) fn make_ca_cert(
 ///
 /// If `password` is true, the generated private key will be password
 /// protected (with a generated diceware password).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn make_user_cert(
     emails: &[&str],
     name: Option<&str>,
     password: bool,
+    password_file: Option<String>,
     cipher_suite: Option<CipherSuite>,
     enable_encryption_subkey: bool,
     enable_signing_subkey: bool,
     enable_authentication_subkey: bool,
 ) -> Result<(Cert, Signature, Option<String>)> {
-    let pass = if password { Some(diceware()) } else { None };
+    let pass = if password {
+        // The user wants to set a password, figure out how we acquire it
+        let pw = match password_file {
+            None => diceware(), // We generate a new, random password
+            Some(file) => {
+                // A password is provided by the user
+                if &file == "-" {
+                    // Get password from stdin
+                    let mut buffer = String::default();
+                    io::stdin().lock().read_line(&mut buffer)?;
+
+                    buffer
+                } else {
+                    // Get password from `file`
+                    let mut f = std::fs::File::open(&file)?;
+                    io::read_to_string(&mut f)?
+                }
+            }
+        };
+
+        Some(pw)
+    } else {
+        None
+    };
 
     let mut builder = cert::CertBuilder::new()
         .set_cipher_suite(cipher_suite.unwrap_or(CipherSuite::Cv25519).into());

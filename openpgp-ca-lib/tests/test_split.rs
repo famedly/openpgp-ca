@@ -70,6 +70,7 @@ fn split_certify(ca: Oca) -> Result<()> {
         &["alice@example.org"],
         None,
         false,
+        None,
         false,
         None,
         true,

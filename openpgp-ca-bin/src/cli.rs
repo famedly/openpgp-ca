@@ -258,6 +258,11 @@ pub enum UserCommand {
         )]
         minimal: bool,
 
+        /// Set an explicit password for the generated user key
+        /// (a filename, or - for stdin).
+        #[clap(long = "password-file")]
+        password_file: Option<String>,
+
         #[clap(long = "cipher-suite", help = "Set cipher suite")]
         cipher_suite: Option<CipherSuite>,
 
