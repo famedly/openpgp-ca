@@ -120,9 +120,15 @@ impl TryFrom<&ComponentAmalgamation<'_, sequoia_openpgp::packet::UserID>> for Us
     fn try_from(
         uid: &ComponentAmalgamation<sequoia_openpgp::packet::UserID>,
     ) -> Result<Self, Self::Error> {
-        let email = uid.email().context("ERROR while converting userid.email")?;
+        let email = uid
+            .email2()
+            .context("ERROR while converting userid.email")?
+            .map(|s| s.to_string());
 
-        let name = uid.name().context("ERROR while converting userid.name")?;
+        let name = uid
+            .name2()
+            .context("ERROR while converting userid.name")?
+            .map(|s| s.to_string());
 
         let raw = String::from_utf8(uid.value().to_vec()).ok();
 

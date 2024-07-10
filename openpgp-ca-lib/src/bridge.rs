@@ -43,7 +43,7 @@ pub fn bridge_new(
 
     // derive an email and domain from the User ID in the remote cert
     let (remote_cert_email, remote_cert_domain) = {
-        if let Some(remote_email) = remote_uid.email()? {
+        if let Some(remote_email) = remote_uid.email2()? {
             let split: Vec<_> = remote_email.split('@').collect();
 
             // expect remote email address with localpart "openpgp-ca"

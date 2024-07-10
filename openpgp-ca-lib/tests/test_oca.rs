@@ -91,9 +91,9 @@ fn test_ca(ca: Oca) -> Result<()> {
             .with_policy(&StandardPolicy::new(), None)
             .unwrap()
             .userid()
-            .name()
+            .name2()
             .unwrap()
-            == Some("Example Org OpenPGP CA Key".to_owned())
+            == Some("Example Org OpenPGP CA Key")
     });
 
     assert!(uid.is_some());
@@ -730,7 +730,11 @@ fn test_import_signed_cert() -> Result<()> {
 
     // check number of signatures on alice userids
     for uid in cert.userids() {
-        let sigs = uid.with_policy(&policy, None)?.bundle().certifications();
+        let sigs: Vec<_> = uid
+            .with_policy(&policy, None)?
+            .bundle()
+            .certifications2()
+            .collect();
 
         assert_eq!(
             sigs.len(),

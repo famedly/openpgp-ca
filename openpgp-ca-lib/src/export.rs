@@ -188,11 +188,11 @@ pub fn export_keylist(
         for cert in oca.get_certs_by_user(user)? {
             // Create Keylist entry for each User ID that the CA has certified
             for uid in oca.cert_check_ca_sig(&cert)?.certified {
-                if let Ok(Some(email)) = uid.email() {
+                if let Ok(Some(email)) = uid.email2() {
                     ukl.keys.push(Key {
                         fingerprint: cert.fingerprint.clone(),
                         name: user.name.clone(),
-                        email: Some(email),
+                        email: Some(email.to_string()),
                         comment: None,
                         keyserver: None,
                     });

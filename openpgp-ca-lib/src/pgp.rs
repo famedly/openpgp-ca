@@ -115,6 +115,7 @@ pub(crate) fn make_ca_cert(
 
     // Remove DKS from cert
     ca_key = ca_key
+        .into_tsk()
         .into_packets()
         .filter(|p| match p {
             Packet::Signature(s) => s.typ() != SignatureType::DirectKey,
@@ -483,7 +484,7 @@ pub fn print_cert_info(data: &[u8]) -> Result<()> {
 pub(crate) fn cert_has_uid_in_domain(c: &Cert, domain: &str) -> Result<bool> {
     for uid in c.userids() {
         // is any uid in domain
-        let email = uid.email()?;
+        let email = uid.email2()?;
         if let Some(email) = email {
             let split: Vec<_> = email.split('@').collect();
 
@@ -514,8 +515,8 @@ fn get_third_party_sigs(c: &Cert) -> Result<Vec<Signature>> {
     let mut res = Vec::new();
 
     for uid in c.userids() {
-        let sigs = uid.with_policy(SP, None)?.bundle().certifications();
-        sigs.iter().for_each(|s| res.push(s.clone()));
+        let sigs = uid.with_policy(SP, None)?.bundle().certifications2();
+        sigs.for_each(|s| res.push(s.clone()));
     }
 
     Ok(res)

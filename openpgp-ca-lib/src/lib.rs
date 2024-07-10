@@ -587,10 +587,11 @@ impl Oca {
 
     /// Get the email of this CA
     pub fn get_ca_email(&self) -> Result<String> {
-        let email = self.get_ca_userid()?.email()?;
+        let uid = self.get_ca_userid()?;
+        let email = uid.email2()?;
 
         if let Some(email) = email {
-            Ok(email)
+            Ok(email.to_string())
         } else {
             Err(anyhow::anyhow!("CA user_id has no email"))
         }

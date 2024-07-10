@@ -143,7 +143,7 @@ fn validate_and_strip_user_ids(
     // emails from the cert's user_ids
     let cert_uid_emails: HashSet<_> = cert
         .userids()
-        .flat_map(|uid| uid.email().ok())
+        .flat_map(|uid| uid.email2().ok().map(|s| s.map(|s| s.to_string())))
         .flatten()
         .collect();
 
@@ -166,14 +166,14 @@ fn validate_and_strip_user_ids(
             let mut filter_uid = Vec::new();
 
             for user_id in cert.userids() {
-                if let Ok(Some(email)) = user_id.email() {
-                    let in_domain = is_email_in_domain(&email, my_domain);
+                if let Ok(Some(email)) = user_id.email2() {
+                    let in_domain = is_email_in_domain(email, my_domain);
 
                     if in_domain.is_ok() && in_domain.unwrap() {
                         // this is a User ID with an email in the domain
                         // "my_domain"
 
-                        if !int_provided.contains(&email) {
+                        if !int_provided.contains(&email.to_string()) {
                             // flag unexpected "internal" emails for removal
                             filter_uid.push(user_id.userid());
                         }

@@ -142,7 +142,7 @@ pub fn cert_import_new(
         // Collect all names that are used in User IDs
         let names: HashSet<_> = user_cert
             .userids()
-            .filter_map(|u| u.userid().name().ok().flatten())
+            .filter_map(|u| u.userid().name2().ok().flatten().map(|s| s.to_string()))
             .collect();
 
         // If there is exactly one name variant between all UserIDs -> use as CA database name
