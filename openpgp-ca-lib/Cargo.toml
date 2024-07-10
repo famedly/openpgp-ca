@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: 2019-2022 Heiko Schaefer <heiko@schaefer.name>
+# SPDX-FileCopyrightText: 2019-2024 Heiko Schaefer <heiko@schaefer.name>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [package]
 name = "openpgp-ca-lib"
-version = "0.13.1"
+version = "0.14.0"
 description = "OpenPGP CA is a tool for managing and certifying OpenPGP keys"
 authors = ["Heiko Schaefer <heiko@schaefer.name>"]
 license = "GPL-3.0-or-later"
